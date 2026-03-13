@@ -1,0 +1,6 @@
+@RiskScreening.API_HostAddress = http://localhost:5215
+
+GET {{RiskScreening.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

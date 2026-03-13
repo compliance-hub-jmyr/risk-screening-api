@@ -1,0 +1,7 @@
+﻿services:
+  riskscreening.api:
+    image: riskscreening.api
+    build:
+      context: .
+      dockerfile: RiskScreening.API/Dockerfile
+
