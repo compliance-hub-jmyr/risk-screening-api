@@ -1,0 +1,112 @@
+# ADR-0005: Rate Limiting con AspNetCoreRateLimit
+
+## Estado
+`Accepted`
+
+## Fecha
+2026-03-13
+
+## Contexto
+
+El requerimiento de la plataforma especifica: **"Número máximo de llamadas por minuto: 20"** para la API de scraping.
+
+Se necesita una estrategia de rate limiting que:
+- Sea precisa (evite bursts al inicio de cada minuto)
+- No requiera infraestructura externa para el entorno de desarrollo
+- Sea fácil de configurar y monitorear
+- Esté particionada por API key (cada consumidor tiene su propia cuota)
+
+Se evaluaron las siguientes opciones:
+
+| Opción | Descripción | Precisión | Infraestructura |
+|--------|-------------|-----------|----------------|
+| **`SlidingWindowRateLimiter` nativo de .NET** | API `System.Threading.RateLimiting` incorporada (ASP.NET Core 7+) | Alta — ventana deslizante por segmentos | Ninguna |
+| **AspNetCoreRateLimit** | Paquete NuGet maduro — configuración declarativa de políticas en `appsettings.json` | Alta — configurable por endpoint/cliente | Ninguna (en memoria) |
+| **Redis + contador custom** | Contador distribuido usando `INCR` + `EXPIRE` | Alta | Redis |
+
+## Decisión
+
+Usar **`AspNetCoreRateLimit`** (paquete NuGet `AspNetCoreRateLimit 5.0.0`) configurado como rate limiting basado en cliente, particionado por el header `X-Api-Key`.
+
+Se eligió `AspNetCoreRateLimit` sobre el `SlidingWindowRateLimiter` nativo porque:
+- Las reglas de política son declarativas en `appsettings.json` — no se requiere cambio de código para ajustar los límites
+- Soporta overrides por cliente (`ClientRateLimitPolicies`) de forma nativa
+- Paquete maduro con uso extensivo en producción en APIs ASP.NET
+
+### Configuración en `appsettings.json`
+
+```json
+{
+  "ClientRateLimiting": {
+    "EnableEndpointRateLimiting": true,
+    "StackBlockedRequests": false,
+    "ClientIdHeader": "X-Api-Key",
+    "HttpStatusCode": 429,
+    "GeneralRules": [
+      {
+        "Endpoint": "GET:/api/lists/*",
+        "Period":   "1m",
+        "Limit":    20
+      }
+    ]
+  }
+}
+```
+
+### Registro de servicios en `Program.cs`
+
+```csharp
+builder.Services.AddMemoryCache();
+builder.Services.Configure<ClientRateLimitOptions>(
+    builder.Configuration.GetSection("ClientRateLimiting"));
+builder.Services.AddSingleton<IClientPolicyStore, MemoryCacheClientPolicyStore>();
+builder.Services.AddSingleton<IRateLimitCounterStore, MemoryCacheRateLimitCounterStore>();
+builder.Services.AddSingleton<IProcessingStrategy, AsyncKeyLockProcessingStrategy>();
+builder.Services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
+builder.Services.AddClientRateLimiting();
+
+// ...
+
+app.UseClientRateLimiting();
+```
+
+### Respuesta HTTP cuando se supera el límite
+
+```http
+HTTP/1.1 429 Too Many Requests
+Retry-After: 30
+Content-Type: application/json
+
+{
+  "message": "API calls quota exceeded. Maximum 20 requests per 1m per API key."
+}
+```
+
+## Consecuencias
+
+**Positivo:**
+- Las reglas son completamente declarativas en `appsettings.json` — ajustables sin recompilar
+- `ClientIdHeader: "X-Api-Key"` particiona la cuota de cada consumidor automáticamente
+- `EnableEndpointRateLimiting: true` limita el scope a `/api/lists/*` solamente — otros endpoints no se ven afectados
+- Header `Retry-After` estándar (RFC 6585) en la respuesta 429
+- Contadores en memoria — no se requiere Redis para la Fase 1
+
+**Negativo:**
+- Estado en memoria — si múltiples instancias de la API corren detrás de un load balancer, cada instancia tiene su propio contador (el límite no se comparte entre instancias)
+- Los contadores se pierden al reiniciar la API
+
+**Mitigación para producción con múltiples instancias:**
+- Reemplazar `MemoryCacheRateLimitCounterStore` con una implementación respaldada por Redis
+- `AspNetCoreRateLimit` soporta un store Redis via el paquete `AspNetCoreRateLimit.Redis` — la configuración permanece idéntica, solo cambia el registro del store
+
+## Dependencias
+
+| Paquete | Versión | Propósito |
+|---------|---------|-----------|
+| `AspNetCoreRateLimit` | 5.0.0 | Middleware de rate limiting basado en cliente con cuotas por key |
+
+## Referencias
+- [AspNetCoreRateLimit en GitHub](https://github.com/stefanprodan/AspNetCoreRateLimit)
+- [AspNetCoreRateLimit en NuGet](https://www.nuget.org/packages/AspNetCoreRateLimit)
+- [RFC 6585 — HTTP 429 Too Many Requests](https://tools.ietf.org/html/rfc6585)
+- [ASP.NET Core Rate Limiting (nativo) — Microsoft Docs](https://learn.microsoft.com/en-us/aspnet/core/performance/rate-limit)
