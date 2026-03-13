@@ -17,4 +17,9 @@
       </Content>
     </ItemGroup>
 
+    <ItemGroup>
+      <Folder Include="Modules\" />
+      <!-- SQL migration scripts embedded into the assembly -->
+      <EmbeddedResource Include="Migrations\Scripts\*.sql" />
+    </ItemGroup>
 </Project>
