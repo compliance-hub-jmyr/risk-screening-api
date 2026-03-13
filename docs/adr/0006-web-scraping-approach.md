@@ -1,0 +1,115 @@
+# ADR-0006: Web Scraping Strategy — On-Demand with Cache (Phase 1)
+
+## Status
+`Accepted`
+
+## Date
+2026-03-13
+
+## Context
+
+The Scraping module requires obtaining data from three external sources:
+1. **OFAC SDN** — US Treasury, available as a public XML feed
+2. **World Bank Debarred Firms** — Web page with a paginated HTML table
+3. **ICIJ Offshore Leaks** — Public REST API (per-query search; no full dataset download)
+
+Two data retrieval strategies were evaluated:
+
+| Strategy | Description | Latency | Risk |
+|----------|-------------|---------|------|
+| **On-demand scraping** | Scrape live when the request arrives; cache the result with a TTL | Moderate on first call; near-zero on cache hit | Slight delay on cache miss; external site must be reachable |
+| **Background refresh + cache** | Periodic `IHostedService` pre-populates cache; all requests served from cache | Near-zero (< 10 ms always) | Data may be up to N minutes old; startup warm-up required |
+
+## Decision
+
+**Phase 1 (current):** On-demand scraping with `IMemoryCache` result caching.
+
+When a search request arrives:
+1. Check `IMemoryCache` for a cached result (keyed by source + query term).
+2. **Cache hit** → return immediately (sub-millisecond).
+3. **Cache miss** → fetch live from the external source, store result in cache with a TTL, then return.
+
+This approach is simpler to implement and operate in Phase 1, avoids the complexity of a background worker, and still delivers fast responses for repeated queries.
+
+> Cache technology choice (IMemoryCache vs Redis) is documented in **ADR-0008**.
+
+### Strategy by source
+
+#### OFAC SDN
+- Source: `https://www.treasury.gov/ofac/downloads/sdn.xml` (public XML)
+- Method: Download and XML parsing with `System.Xml.Linq`
+- Cache key: `scraping:ofac:{normalizedQuery}`
+- TTL: **60 minutes**
+
+#### World Bank Debarred Firms
+- Source: `https://projects.worldbank.org/en/projects-operations/procurement/debarred-firms`
+- Method: HTTP GET + HTML table parsing with `HtmlAgilityPack`
+- Pagination: the table has multiple pages — the client iterates to the last one
+- Cache key: `scraping:worldbank:{normalizedQuery}`
+- TTL: **120 minutes** (data changes less frequently)
+
+#### ICIJ Offshore Leaks
+- Source: `https://offshoreleaks.icij.org/api/nodes` (public REST API)
+- Method: HTTP GET with parameters `?q={query}` (real-time per-query search)
+- Always on-demand — the dataset is too large to cache in full; the public API supports per-query search natively
+- Cache key: `scraping:icij:{normalizedQuery}`
+- TTL: **15 minutes**
+
+### Error handling
+
+```
+If a live fetch fails (timeout, HTTP error, parse error):
+  - Log error at WARNING level
+  - Return a structured error response (503 / partial result)
+  - Do NOT write a failed result to cache
+  - The next request will retry the live fetch
+```
+
+### Status endpoint
+
+```http
+GET /api/lists/status
+```
+
+Returns the cache state for each source:
+
+```json
+{
+  "ofac":      { "strategy": "ON_DEMAND", "ttlMinutes": 60 },
+  "worldBank": { "strategy": "ON_DEMAND", "ttlMinutes": 120 },
+  "icij":      { "strategy": "ON_DEMAND", "ttlMinutes": 15 }
+}
+```
+
+## Consequences
+
+**Positive:**
+- Simple to implement — no background worker, no startup warm-up complexity
+- Repeated queries for the same term respond in sub-millisecond time (cache hit)
+- Lower load on external sites compared to scraping on every single request
+- No stale data risk from a worker that failed to refresh
+
+**Negative:**
+- First request for a new query term incurs live fetch latency (OFAC XML download can take 1–3 s)
+- If the external source is unavailable at query time, the request fails (no pre-cached fallback)
+
+**Mitigation:**
+- Use `Polly` retry + timeout policies on all HTTP clients to reduce transient failure impact
+- A `GET /api/lists/status` endpoint lets operators know the cache state
+- **Phase 2 (future):** Replace on-demand fetching for OFAC and World Bank with a `BackgroundService` that pre-populates cache on startup and refreshes periodically. ICIJ remains on-demand permanently (dataset size, public API design). This improvement is intentionally deferred to avoid over-engineering Phase 1.
+
+## Dependencies
+
+| Package | Version | Purpose |
+|---------|---------|---------|
+| `HtmlAgilityPack` | 1.11.x | HTML parsing for World Bank |
+| `System.Xml.Linq` | .NET 10 | XML parsing for OFAC SDN |
+| `Microsoft.Extensions.Http` | .NET 10 | `HttpClientFactory` for typed clients |
+| `Polly` | 8.x | Retry and timeout policies for HTTP requests |
+
+## References
+- [OFAC SDN List Downloads](https://www.treasury.gov/resource-center/sanctions/SDN-List/Pages/default.aspx)
+- [ICIJ Offshore Leaks API](https://offshoreleaks.icij.org/api)
+- [HtmlAgilityPack](https://html-agility-pack.net/)
+- [Polly — .NET Resilience Library](https://github.com/App-vNext/Polly)
+- ADR-0008 — Cache technology: IMemoryCache (Phase 1)
