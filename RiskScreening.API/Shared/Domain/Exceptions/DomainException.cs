@@ -27,13 +27,13 @@ public abstract class DomainException : Exception
         : base(message)
     {
         ErrorNumber = errorNumber;
-        ErrorCode   = errorCode;
+        ErrorCode = errorCode;
     }
 
     protected DomainException(string message, int errorNumber, string errorCode, Exception innerException)
         : base(message, innerException)
     {
         ErrorNumber = errorNumber;
-        ErrorCode   = errorCode;
+        ErrorCode = errorCode;
     }
 }
