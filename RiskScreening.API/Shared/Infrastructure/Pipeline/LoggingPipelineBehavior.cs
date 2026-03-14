@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using MediatR;
+using RiskScreening.API.Shared.Domain.Exceptions;
 
 namespace RiskScreening.API.Shared.Infrastructure.Pipeline;
 
@@ -38,12 +39,21 @@ public class LoggingPipelineBehavior<TRequest, TResponse>(ILogger<LoggingPipelin
 
             return response;
         }
+        catch (DomainException ex)
+        {
+            stopwatch.Stop();
+
+            logger.LogWarning("Domain rule violated handling {RequestName} after {ElapsedMilliseconds}ms — [{ErrorCode}] {Message}",
+                requestName, stopwatch.ElapsedMilliseconds, ex.ErrorCode, ex.Message);
+
+            throw;
+        }
         catch (Exception ex)
         {
             stopwatch.Stop();
 
-            logger.LogError(ex, "Error handling {RequestName} after {ElapsedMilliseconds}ms", requestName,
-                stopwatch.ElapsedMilliseconds);
+            logger.LogError(ex, "Unexpected error handling {RequestName} after {ElapsedMilliseconds}ms",
+                requestName, stopwatch.ElapsedMilliseconds);
 
             throw;
         }
