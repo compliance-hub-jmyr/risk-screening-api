@@ -4,4 +4,26 @@
     build:
       context: .
       dockerfile: RiskScreening.API/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=RiskScreeningDb;User Id=sa;Password=RiskScreening123!;TrustServerCertificate=True"
+      AllowedHosts: "*"
+    depends_on:
+      - sqlserver
 
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: riskscreening-sqlserver
+    environment:
+      MSSQL_SA_PASSWORD: "RiskScreening123!"
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+
+volumes:
+  sqlserver_data:
