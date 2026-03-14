@@ -12,7 +12,7 @@ public interface IPasswordHasher
     /// <param name="plainText"></param>
     /// <returns></returns>
     string Hash(string plainText);
-    
+
     /// <summary>
     /// Verifies a plain text password against a BCrypt hash.
     /// </summary>

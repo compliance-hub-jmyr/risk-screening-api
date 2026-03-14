@@ -14,7 +14,6 @@ namespace RiskScreening.API.Modules.IAM.Interfaces.REST.Documentation;
 /// </summary>
 public interface IAuthenticationController
 {
-
     /// <summary>Authenticate with email and password and receive a JWT token.</summary>
     [SwaggerOperation(
         Summary = "Sign in",

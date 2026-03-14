@@ -21,7 +21,7 @@ public interface IJwtTokenService
     /// <param name="token"></param>
     /// <returns></returns>
     string? GetEmailFromToken(string token);
-    
+
     /// <summary>
     /// Validates the given JWT token.
     /// </summary>
