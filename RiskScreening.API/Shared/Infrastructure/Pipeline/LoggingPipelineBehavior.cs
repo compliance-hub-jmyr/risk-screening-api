@@ -20,7 +20,8 @@ public class LoggingPipelineBehavior<TRequest, TResponse>(ILogger<LoggingPipelin
     /// <param name="next">The delegate representing the next handler in the pipeline.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The response produced by the handler.</returns>
-    public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next, CancellationToken cancellationToken)
+    public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next,
+        CancellationToken cancellationToken)
     {
         var requestName = typeof(TRequest).Name;
 
@@ -32,7 +33,8 @@ public class LoggingPipelineBehavior<TRequest, TResponse>(ILogger<LoggingPipelin
             var response = await next(cancellationToken);
             stopwatch.Stop();
 
-            logger.LogInformation("Handled {RequestName} in {ElapsedMilliseconds}ms", requestName, stopwatch.ElapsedMilliseconds);
+            logger.LogInformation("Handled {RequestName} in {ElapsedMilliseconds}ms", requestName,
+                stopwatch.ElapsedMilliseconds);
 
             return response;
         }
@@ -40,7 +42,8 @@ public class LoggingPipelineBehavior<TRequest, TResponse>(ILogger<LoggingPipelin
         {
             stopwatch.Stop();
 
-            logger.LogError(ex, "Error handling {RequestName} after {ElapsedMilliseconds}ms", requestName, stopwatch.ElapsedMilliseconds);
+            logger.LogError(ex, "Error handling {RequestName} after {ElapsedMilliseconds}ms", requestName,
+                stopwatch.ElapsedMilliseconds);
 
             throw;
         }

@@ -43,8 +43,8 @@ public abstract class SpecificationComposer<T>
     /// <param name="mapper">Function that builds the predicate from the value.</param>
     /// <returns>The predicate, or <c>null</c> if the value is absent.</returns>
     protected static Expression<Func<T, bool>>? ToSpec<V>(
-        V?                                    value,
-        Func<V, Expression<Func<T, bool>>>    mapper)
+        V? value,
+        Func<V, Expression<Func<T, bool>>> mapper)
     {
         if (value is null) return null;
         if (value is string str && string.IsNullOrWhiteSpace(str)) return null;
@@ -60,7 +60,7 @@ public abstract class SpecificationComposer<T>
     /// <param name="specs">Predicates to combine (nulls are ignored).</param>
     /// <returns>Query with all non-null predicates applied as AND conditions.</returns>
     protected static IQueryable<T> ApplyAndFilters(
-        IQueryable<T>                     query,
+        IQueryable<T> query,
         params Expression<Func<T, bool>>?[] specs)
     {
         return specs
@@ -74,7 +74,7 @@ public abstract class SpecificationComposer<T>
     ///     Returns the original query unchanged if all predicates are null.
     /// </summary>
     protected static IQueryable<T> ApplyOrFilters(
-        IQueryable<T>                     query,
+        IQueryable<T> query,
         params Expression<Func<T, bool>>?[] specs)
     {
         var valid = specs.Where(s => s is not null).ToList();
@@ -93,9 +93,9 @@ public abstract class SpecificationComposer<T>
         Expression<Func<T, bool>> left,
         Expression<Func<T, bool>> right)
     {
-        var param= Expression.Parameter(typeof(T));
-        var leftBody= Expression.Invoke(left, param);
-        var rightBody= Expression.Invoke(right, param);
+        var param = Expression.Parameter(typeof(T));
+        var leftBody = Expression.Invoke(left, param);
+        var rightBody = Expression.Invoke(right, param);
         return Expression.Lambda<Func<T, bool>>(
             Expression.OrElse(leftBody, rightBody), param);
     }

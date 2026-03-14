@@ -48,7 +48,7 @@ public static class ErrorCodes
     // AUTHENTICATION ERRORS (2000–2999)
     // =====================================================================
 
-    public const int AuthenticationFailed     = 2000;
+    public const int AuthenticationFailed = 2000;
     public const string AuthenticationFailedCode = "AUTHENTICATION_FAILED";
 
     public const int InvalidCredentials = 2001;

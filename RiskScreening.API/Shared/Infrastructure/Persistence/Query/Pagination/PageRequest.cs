@@ -26,7 +26,7 @@ public record PageRequest
 {
     public const int DefaultPage = 0;
     public const int DefaultSize = 20;
-    public const int MaxSize     = 100;
+    public const int MaxSize = 100;
 
     /// <summary>Zero-based page number. Always &gt;= 0.</summary>
     public int Page { get; init; }
@@ -41,14 +41,14 @@ public record PageRequest
     public string? SortDirection { get; init; }
 
     public PageRequest(
-        int?    page          = null,
-        int?    size          = null,
-        string? sortBy        = null,
+        int? page = null,
+        int? size = null,
+        string? sortBy = null,
         string? sortDirection = null)
     {
-        Page          = page is >= 0 ? page.Value : DefaultPage;
-        Size          = size is > 0  ? Math.Min(size.Value, MaxSize) : DefaultSize;
-        SortBy        = sortBy;
+        Page = page is >= 0 ? page.Value : DefaultPage;
+        Size = size is > 0 ? Math.Min(size.Value, MaxSize) : DefaultSize;
+        SortBy = sortBy;
         SortDirection = sortDirection;
     }
 }

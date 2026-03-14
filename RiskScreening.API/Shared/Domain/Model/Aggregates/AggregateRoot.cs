@@ -61,5 +61,8 @@ public abstract class AggregateRoot : IAuditableEntity
     }
 
     /// <inheritdoc />
-    public override int GetHashCode() => HashCode.Combine(GetType(), Id);
+    public override int GetHashCode()
+    {
+        return HashCode.Combine(GetType(), Id);
+    }
 }

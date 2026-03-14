@@ -42,11 +42,9 @@ public sealed class DomainExceptionHandler(ILogger<DomainExceptionHandler> logge
         // Map DomainValidationException field errors to the response if present
         IReadOnlyList<ErrorResponse.FieldError>? fieldErrors = null;
         if (domainException is DomainValidationException domainValidation)
-        {
             fieldErrors = domainValidation.FieldErrors
                 .Select(e => new ErrorResponse.FieldError(e.Field, e.Message, e.RejectedValue))
                 .ToList();
-        }
 
         var error = new ErrorResponse
         {
@@ -64,21 +62,27 @@ public sealed class DomainExceptionHandler(ILogger<DomainExceptionHandler> logge
         return true;
     }
 
-    private static int GetStatusCode(DomainException exception) => exception switch
+    private static int GetStatusCode(DomainException exception)
     {
-        EntityNotFoundException => StatusCodes.Status404NotFound,
-        BusinessRuleViolationException => StatusCodes.Status409Conflict,
-        AuthenticationException => StatusCodes.Status401Unauthorized,
-        AuthorizationException => StatusCodes.Status403Forbidden,
-        _ => StatusCodes.Status400BadRequest
-    };
+        return exception switch
+        {
+            EntityNotFoundException => StatusCodes.Status404NotFound,
+            BusinessRuleViolationException => StatusCodes.Status409Conflict,
+            AuthenticationException => StatusCodes.Status401Unauthorized,
+            AuthorizationException => StatusCodes.Status403Forbidden,
+            _ => StatusCodes.Status400BadRequest
+        };
+    }
 
-    private static string GetTitle(DomainException exception) => exception switch
+    private static string GetTitle(DomainException exception)
     {
-        EntityNotFoundException => "Resource not found",
-        BusinessRuleViolationException => "Business rule violation",
-        AuthenticationException => "Unauthorized",
-        AuthorizationException => "Forbidden",
-        _ => "Bad request"
-    };
+        return exception switch
+        {
+            EntityNotFoundException => "Resource not found",
+            BusinessRuleViolationException => "Business rule violation",
+            AuthenticationException => "Unauthorized",
+            AuthorizationException => "Forbidden",
+            _ => "Bad request"
+        };
+    }
 }

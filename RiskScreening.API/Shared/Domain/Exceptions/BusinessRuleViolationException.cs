@@ -16,5 +16,7 @@ namespace RiskScreening.API.Shared.Domain.Exceptions;
 public abstract class BusinessRuleViolationException : DomainException
 {
     protected BusinessRuleViolationException(string message, int errorNumber, string errorCode)
-        : base(message, errorNumber, errorCode) { }
+        : base(message, errorNumber, errorCode)
+    {
+    }
 }

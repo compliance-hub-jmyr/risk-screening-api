@@ -25,19 +25,24 @@ namespace RiskScreening.API.Shared.Interfaces.REST.Resources;
 /// </code>
 /// </example>
 public record PageResponse<T>(
-    [property: JsonPropertyName("content")]  List<T>                    Content,
-    [property: JsonPropertyName("meta")]     PageResponse<T>.PageMetadata Page
+    [property: JsonPropertyName("content")]
+    List<T> Content,
+    [property: JsonPropertyName("meta")] PageResponse<T>.PageMetadata Page
 )
 {
     /// <summary>Pagination metadata.</summary>
     public record PageMetadata(
-        [property: JsonPropertyName("number")]        int  Number,
-        [property: JsonPropertyName("size")]          int  Size,
-        [property: JsonPropertyName("totalElements")] long TotalElements,
-        [property: JsonPropertyName("totalPages")]    int  TotalPages,
-        [property: JsonPropertyName("first")]         bool First,
-        [property: JsonPropertyName("last")]          bool Last,
-        [property: JsonPropertyName("hasNext")]       bool HasNext,
-        [property: JsonPropertyName("hasPrevious")]   bool HasPrevious
+        [property: JsonPropertyName("number")] int Number,
+        [property: JsonPropertyName("size")] int Size,
+        [property: JsonPropertyName("totalElements")]
+        long TotalElements,
+        [property: JsonPropertyName("totalPages")]
+        int TotalPages,
+        [property: JsonPropertyName("first")] bool First,
+        [property: JsonPropertyName("last")] bool Last,
+        [property: JsonPropertyName("hasNext")]
+        bool HasNext,
+        [property: JsonPropertyName("hasPrevious")]
+        bool HasPrevious
     );
 }

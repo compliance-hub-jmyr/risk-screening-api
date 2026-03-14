@@ -31,7 +31,8 @@ public class ValidationPipelineBehavior<TRequest, TResponse>(IEnumerable<IValida
     /// <exception cref="ValidationException">
     ///     Thrown when one or more validation rules fail.
     /// </exception>
-    public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next, CancellationToken cancellationToken)
+    public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next,
+        CancellationToken cancellationToken)
     {
         if (!validators.Any())
             return await next(cancellationToken);

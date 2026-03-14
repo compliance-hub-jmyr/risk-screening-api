@@ -34,5 +34,8 @@ public abstract class Entity<TId> : IAuditableEntity
     }
 
     /// <inheritdoc/>
-    public override int GetHashCode() => GetType().GetHashCode();
+    public override int GetHashCode()
+    {
+        return GetType().GetHashCode();
+    }
 }

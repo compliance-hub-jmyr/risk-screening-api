@@ -27,7 +27,8 @@ public class InvalidValueException : DomainException
     public string Reason { get; }
 
     public InvalidValueException(string valueObjectName, string? invalidValue, string reason)
-        : base(BuildMessage(valueObjectName, invalidValue, reason), ErrorCodes.InvalidValue, BuildErrorCode(valueObjectName))
+        : base(BuildMessage(valueObjectName, invalidValue, reason), ErrorCodes.InvalidValue,
+            BuildErrorCode(valueObjectName))
     {
         ValueObjectName = valueObjectName;
         InvalidValue = invalidValue;
@@ -35,10 +36,13 @@ public class InvalidValueException : DomainException
     }
 
     public InvalidValueException(string valueObjectName, string reason)
-        : this(valueObjectName, null, reason) { }
+        : this(valueObjectName, null, reason)
+    {
+    }
 
     /// <summary>Constructor with a custom error number for specific Value Object types.</summary>
-    public InvalidValueException(string valueObjectName, string? invalidValue, string reason, int errorNumber, string errorCode)
+    public InvalidValueException(string valueObjectName, string? invalidValue, string reason, int errorNumber,
+        string errorCode)
         : base(BuildMessage(valueObjectName, invalidValue, reason), errorNumber, errorCode)
     {
         ValueObjectName = valueObjectName;
@@ -46,14 +50,18 @@ public class InvalidValueException : DomainException
         Reason = reason;
     }
 
-    private static string BuildMessage(string name, string? value, string reason) =>
-        string.IsNullOrWhiteSpace(value)
+    private static string BuildMessage(string name, string? value, string reason)
+    {
+        return string.IsNullOrWhiteSpace(value)
             ? $"Invalid {name}: {reason}"
             : $"Invalid {name} '{value}': {reason}";
+    }
 
     // e.g. "EmailAddress" → "INVALID_EMAIL_ADDRESS"
-    private static string BuildErrorCode(string valueObjectName) =>
-        "INVALID_" + System.Text.RegularExpressions.Regex
+    private static string BuildErrorCode(string valueObjectName)
+    {
+        return "INVALID_" + System.Text.RegularExpressions.Regex
             .Replace(valueObjectName, "([a-z])([A-Z])", "$1_$2")
             .ToUpperInvariant();
+    }
 }

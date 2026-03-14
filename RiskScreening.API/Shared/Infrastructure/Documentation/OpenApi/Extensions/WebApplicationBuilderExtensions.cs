@@ -52,7 +52,7 @@ public static class WebApplicationBuilderExtensions
             options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
             {
                 In = ParameterLocation.Header,
-                Description  = "Enter JWT token obtained from /api/authentication/sign-in",
+                Description = "Enter JWT token obtained from /api/authentication/sign-in",
                 Name = "Authorization",
                 Type = SecuritySchemeType.Http,
                 BearerFormat = "JWT",

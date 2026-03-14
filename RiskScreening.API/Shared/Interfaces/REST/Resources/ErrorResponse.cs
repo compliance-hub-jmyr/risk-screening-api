@@ -97,8 +97,10 @@ public record ErrorResponse
 
     /// <summary>Per-field validation error detail.</summary>
     public record FieldError(
-        [property: JsonPropertyName("field")]         string  Field,
-        [property: JsonPropertyName("message")]       string  Message,
-        [property: JsonPropertyName("rejectedValue")] object? RejectedValue
+        [property: JsonPropertyName("field")] string Field,
+        [property: JsonPropertyName("message")]
+        string Message,
+        [property: JsonPropertyName("rejectedValue")]
+        object? RejectedValue
     );
 }

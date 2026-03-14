@@ -26,15 +26,17 @@ public class DomainValidationException : DomainException
     public IReadOnlyList<DomainFieldError> FieldErrors { get; }
 
     public DomainValidationException(IReadOnlyList<DomainFieldError> fieldErrors)
-        : base("Domain validation failed. Check field errors for details.", 
+        : base("Domain validation failed. Check field errors for details.",
             ErrorCodes.ValidationFailed,
-               ErrorCodes.ValidationFailedCode)
+            ErrorCodes.ValidationFailedCode)
     {
         FieldErrors = fieldErrors;
     }
 
     public DomainValidationException(string field, string message, object? rejectedValue = null)
-        : this([new DomainFieldError(field, message, rejectedValue)]) { }
+        : this([new DomainFieldError(field, message, rejectedValue)])
+    {
+    }
 }
 
 /// <summary>Field-level error emitted by a <see cref="DomainValidationException"/>.</summary>

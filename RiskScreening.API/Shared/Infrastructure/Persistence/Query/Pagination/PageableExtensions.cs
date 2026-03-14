@@ -29,11 +29,11 @@ public static class PageableExtensions
     /// </example>
     public static async Task<PageResponse<T>> ToPageResponseAsync<T>(
         this IQueryable<T> query,
-        PageRequest        request,
-        CancellationToken  ct = default)
+        PageRequest request,
+        CancellationToken ct = default)
     {
         var totalElements = await query.LongCountAsync(ct);
-        var totalPages    = (int)Math.Ceiling((double)totalElements / request.Size);
+        var totalPages = (int)Math.Ceiling((double)totalElements / request.Size);
 
         var content = await query
             .Skip(request.Page * request.Size)
@@ -43,14 +43,14 @@ public static class PageableExtensions
         return new PageResponse<T>(
             content,
             new PageResponse<T>.PageMetadata(
-                Number:        request.Page,
-                Size:          request.Size,
-                TotalElements: totalElements,
-                TotalPages:    totalPages,
-                First:         request.Page == 0,
-                Last:          request.Page >= totalPages - 1,
-                HasNext:       request.Page < totalPages - 1,
-                HasPrevious:   request.Page > 0
+                request.Page,
+                request.Size,
+                totalElements,
+                totalPages,
+                request.Page == 0,
+                request.Page >= totalPages - 1,
+                request.Page < totalPages - 1,
+                request.Page > 0
             )
         );
     }

@@ -49,7 +49,6 @@ public class AppDbContext : DbContext
         var actor = _httpContextAccessor?.HttpContext?.User.FindFirstValue(ClaimTypes.Name);
 
         foreach (var entry in ChangeTracker.Entries<IAuditableEntity>())
-        {
             switch (entry.State)
             {
                 case EntityState.Added:
@@ -60,6 +59,7 @@ public class AppDbContext : DbContext
                         entry.CurrentValues[nameof(IAuditableEntity.CreatedBy)] = actor;
                         entry.CurrentValues[nameof(IAuditableEntity.UpdatedBy)] = actor;
                     }
+
                     break;
                 case EntityState.Modified:
                     entry.CurrentValues[nameof(IAuditableEntity.UpdatedAt)] = now;
@@ -67,7 +67,6 @@ public class AppDbContext : DbContext
                         entry.CurrentValues[nameof(IAuditableEntity.UpdatedBy)] = actor;
                     break;
             }
-        }
 
         return base.SaveChangesAsync(cancellationToken);
     }

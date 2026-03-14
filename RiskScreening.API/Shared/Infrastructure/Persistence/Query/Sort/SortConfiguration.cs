@@ -68,6 +68,8 @@ public abstract class SortConfiguration<T>
     }
 
     /// <summary>Applies the default sort configuration to the query.</summary>
-    public IOrderedQueryable<T> DefaultSort(IQueryable<T> query) =>
-        ApplySort(query, null, null);
+    public IOrderedQueryable<T> DefaultSort(IQueryable<T> query)
+    {
+        return ApplySort(query, null, null);
+    }
 }

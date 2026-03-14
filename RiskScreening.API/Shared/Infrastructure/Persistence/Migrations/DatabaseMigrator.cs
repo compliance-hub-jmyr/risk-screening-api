@@ -31,7 +31,7 @@ public static class DatabaseMigrator
                 Assembly.GetExecutingAssembly(),
                 // Only pick scripts inside the Migrations/Scripts folder
                 scriptName => scriptName.Contains(".Migrations.Scripts."))
-            .WithTransactionPerScript()   // each script runs in its own transaction
+            .WithTransactionPerScript() // each script runs in its own transaction
             .LogToConsole()
             .Build();
 

@@ -9,7 +9,7 @@ public partial record Username : ValueObject
 {
     [GeneratedRegex(@"^[a-zA-Z0-9._\-]{3,50}$", RegexOptions.Compiled)]
     private static partial Regex MyRegex();
-    
+
     private static readonly Regex ValidPattern = MyRegex();
 
     public string Value { get; }
@@ -28,7 +28,13 @@ public partial record Username : ValueObject
         Value = value;
     }
 
-    public override string ToString() => Value;
+    public override string ToString()
+    {
+        return Value;
+    }
 
-    public static implicit operator string(Username username) => username.Value;
+    public static implicit operator string(Username username)
+    {
+        return username.Value;
+    }
 }

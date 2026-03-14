@@ -12,14 +12,17 @@ public partial record Password : ValueObject
 {
     [GeneratedRegex(@"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$", RegexOptions.Compiled)]
     private static partial Regex MyRegex();
-    
+
     private static readonly Regex StrongPassword = MyRegex();
 
     /// <summary>BCrypt hash — never plain text.</summary>
     public string Hash { get; }
 
     /// <summary>Creates a Password from an already-hashed value (e.g., loaded from DB).</summary>
-    private Password(string hash) => Hash = hash;
+    private Password(string hash)
+    {
+        Hash = hash;
+    }
 
     /// <summary>
     ///     Validates the plain text password strength, then stores only the hash.
@@ -40,7 +43,13 @@ public partial record Password : ValueObject
     }
 
     /// <summary>Creates a Password directly from a stored hash (no validation).</summary>
-    public static Password FromHash(string hash) => new(hash);
+    public static Password FromHash(string hash)
+    {
+        return new Password(hash);
+    }
 
-    public override string ToString() => "***";
+    public override string ToString()
+    {
+        return "***";
+    }
 }

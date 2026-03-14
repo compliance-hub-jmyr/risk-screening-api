@@ -1,4 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+/*using RiskScreening.API.Modules.IAM.Infrastructure.Extensions;
+using RiskScreening.API.Modules.Scraping.Infrastructure.Extensions;
+using RiskScreening.API.Modules.Suppliers.Infrastructure.Extensions;*/
 using RiskScreening.API.Shared.Infrastructure.Documentation.OpenApi.Extensions;
 using RiskScreening.API.Shared.Infrastructure.Extensions;
 using RiskScreening.API.Shared.Infrastructure.Interfaces;
@@ -33,6 +36,15 @@ builder.AddMediator(typeof(Program));
 // Shared infrastructure: IUnitOfWork and cross-cutting services
 builder.AddSharedInfrastructure();
 
+/*// IAM module: repositories, BCrypt, JWT auth, seeder
+builder.AddIamModule();
+
+// Scraping module: HTTP clients, IMemoryCache, rate limiting
+builder.AddScrapingModule();
+
+// Suppliers module: repositories, EF configurations
+builder.AddSuppliersModule();*/
+
 // Entity Framework Core with SQL Server
 // Reads connection string from app settings.{Environment}.json
 // or from environment variables (ConnectionStrings__DefaultConnection)
@@ -53,16 +65,20 @@ var app = builder.Build();
 // Runs pending SQL scripts from Migrations/Scripts/*.sql (embedded resources).
 DatabaseMigrator.Migrate(builder.Configuration.GetConnectionString("DefaultConnection")!);
 
+/*// Seed IAM data — system roles + default admin user
+await app.UseIamModuleAsync();*/
+
 if (app.Environment.IsDevelopment())
-{
     // Native OpenAPI JSON: /openapi/v1.json
     // Swashbuckle JSON:    /swagger/v1/swagger.json
     // Swagger UI:          /swagger
     app.UseOpenApiDocumentation();
-}
 
 // Applies the AllowAllPolicy registered by AddCorsPolicy()
 app.UseCorsPolicy();
+
+/*// IP rate limiting — must run before auth (20 req/min on /api/v1/lists/*)
+app.UseScrapingModule();*/
 
 // JWT Bearer authentication + role-based authorization
 app.UseAuthentication();

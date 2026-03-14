@@ -33,7 +33,7 @@ public sealed class ValidationExceptionHandler(ILogger<ValidationExceptionHandle
         {
             Title = "Validation failed",
             Status = StatusCodes.Status400BadRequest,
-            Instance= httpContext.Request.Path,
+            Instance = httpContext.Request.Path,
             ErrorNumber = ErrorCodes.ValidationFailed,
             ErrorCode = ErrorCodes.ValidationFailedCode,
             Message = "Request validation failed. Check field errors for details.",
