@@ -26,9 +26,9 @@ Scripts de migracion SQL V001–V003, configuraciones EF Core para `User`, `Role
 
 #### Tareas
 
-- `[BE-DB]` Script `V001__create_roles_table.sql` — columnas: `id`, `name`, `description`, `is_system_role`, `created_at`
-- `[BE-DB]` Script `V002__create_users_table.sql` — columnas: `id`, `email`, `username`, `password_hash`, `account_status`, `failed_login_attempts`, `created_at`, `last_login_at`
-- `[BE-DB]` Script `V003__create_user_roles_table.sql` — tabla de union: `user_id`, `role_id`
+- `[BE-DB]` Script `V001__create_roles_table.sql` — columnas: `id`, `name`, `description`, `is_system_role`, `created_at`, `updated_at`, `created_by`, `updated_by`
+- `[BE-DB]` Script `V002__create_users_table.sql` — columnas: `id`, `email`, `username`, `password`, `status`, `failed_login_attempts`, `last_login_at`, `locked_at`, `created_at`, `updated_at`, `created_by`, `updated_by`
+- `[BE-DB]` Script `V003__create_user_roles_table.sql` — tabla de union: `user_id`, `roles_id`
 - `[BE-INFRA]` EF Core `IEntityTypeConfiguration<User>`, `IEntityTypeConfiguration<Role>`, `IEntityTypeConfiguration<UserRole>`
 - `[BE-INFRA]` `IamSeeder` — siembra el rol `ADMIN`, el rol `ANALYST` y un usuario administrador por defecto con password hasheado en `IHostedService.StartAsync`
 - `[BE-APP]` Shared kernel: clases base `AggregateRoot`, `ValueObject`, `DomainException`; interfaz `IUnitOfWork`
@@ -38,7 +38,7 @@ Scripts de migracion SQL V001–V003, configuraciones EF Core para `User`, `Role
 - Given que la aplicacion arranca por primera vez contra una base de datos vacia
 - When la secuencia de arranque se completa
 - Then la tabla `roles` contiene exactamente dos roles de sistema: `ADMIN` y `ANALYST`, ambos con `is_system_role = true`
-- And la tabla `users` contiene un usuario administrador por defecto con `account_status = ACTIVE`
+- And la tabla `users` contiene un usuario administrador por defecto con `status = ACTIVE`
 - And arranques posteriores son idempotentes (el seeder no crea duplicados)
 
 ---
@@ -439,17 +439,77 @@ Endpoint `DELETE /api/users/{id}/roles/{roleName}` que elimina la relacion `user
 
 ---
 
-## Fuera de Alcance — v1.0
+## Epica: Gestion de Roles (solo ADMIN)
 
-Las siguientes historias **no estan en alcance para v1.0**. Los roles son roles de sistema fijos (`ADMIN`, `ANALYST`) sembrados al arrancar. La gestion dinamica de roles se difiere a un hito futuro.
+---
 
-### US-IAM-010: Listar todos los roles *(diferido)*
+### US-IAM-010: Listar todos los roles
 
-Endpoint `GET /api/roles` que retorna el catalogo de roles. No requerido en v1.0 ya que los roles son sembrados y conocidos en tiempo de diseno.
+**Titulo:** Consultar el catalogo de roles
 
-### US-IAM-011: Crear rol personalizado *(diferido)*
+**Descripcion:**
+Como administrador, quiero obtener la lista de todos los roles disponibles, para saber que roles existen en el sistema antes de asignarlos a usuarios.
 
-Endpoint `POST /api/roles` para crear roles personalizados con nombres arbitrarios. No requerido en v1.0; solo se soportan `ADMIN` y `ANALYST`.
+**Entregable:**
+Endpoint `GET /api/roles` que retorna todos los roles del sistema.
+
+**Dependencias:**
+- `TS-IAM-000`
+
+**Prioridad:** Media | **Estimacion:** 1 SP | **Estado:** Implementado (v0.3.0)
+
+#### Tareas
+
+- `[BE-APP]` `GetAllRolesQuery` + `GetAllRolesQueryHandler`
+- `[BE-INFRA]` `RoleRepository.FindAllAsync()`
+- `[BE-INTERFACES]` `RolesController.GetAll` — `[Authorize(Roles = "ADMIN")]`
+
+#### Criterios de Aceptacion
+
+**Escenario 1: Listado exitoso**
+- Given que soy ADMIN autenticado
+- When llamo `GET /api/roles`
+- Then recibo HTTP 200 con la lista de todos los roles incluyendo `{ id, name, description, isSystemRole }`
+
+**Escenario 2: Sin autenticacion**
+- Given que no incluyo token JWT
+- When llamo `GET /api/roles`
+- Then recibo HTTP 401 Unauthorized
+
+---
+
+### US-IAM-011: Crear rol personalizado
+
+**Titulo:** Crear un nuevo rol en el sistema
+
+**Descripcion:**
+Como administrador, quiero crear un rol personalizado con un nombre unico, para poder definir nuevos perfiles de permisos mas alla de los roles de sistema por defecto.
+
+**Entregable:**
+Endpoint `POST /api/roles` que crea un nuevo rol no-sistema.
+
+**Dependencias:**
+- `TS-IAM-000`
+
+**Prioridad:** Media | **Estimacion:** 1 SP | **Estado:** Implementado (v0.3.0)
+
+#### Tareas
+
+- `[BE-APP]` `CreateRoleCommand` + `CreateRoleCommandHandler` — valida unicidad del nombre, lanza `RoleAlreadyExistsException` si es duplicado
+- `[BE-INTERFACES]` `RolesController.Create` — `[Authorize(Roles = "ADMIN")]`; retorna 201 Created
+
+#### Criterios de Aceptacion
+
+**Escenario 1: Creacion exitosa**
+- Given que soy ADMIN autenticado
+- And envio `POST /api/roles` con un `name` unico
+- When la peticion se procesa
+- Then recibo HTTP 201 Created con el Id del nuevo rol
+
+**Escenario 2: Nombre de rol duplicado**
+- Given que ya existe un rol con el mismo nombre
+- When envio `POST /api/roles` con ese nombre
+- Then recibo HTTP 409 Conflict
 
 ---
 
@@ -462,4 +522,4 @@ Endpoint `POST /api/roles` para crear roles personalizados con nombres arbitrari
 | Roles del sistema | `ADMIN` y `ANALYST` son `IsSystemRole = true`, sembrados al startup via `TS-IAM-000` |
 | Idempotencia | `AssignRole` y `Activate` son idempotentes — llamar multiples veces no causa error |
 | Normalizacion | Nombres de roles se normalizan a UPPERCASE en el dominio |
-| Estado de implementacion | Todas las US-IAM implementadas en v0.2.0 (auth) y v0.3.0 (users/roles) |
+| Estado de implementacion | Todas las US-IAM (incluyendo US-IAM-010 y US-IAM-011) implementadas en v0.2.0 (auth) y v0.3.0 (users/roles) |

@@ -26,9 +26,9 @@ SQL migration scripts V001–V003, EF Core configurations for `User`, `Role`, an
 
 #### Tasks
 
-- `[BE-DB]` Script `V001__create_roles_table.sql` — columns: `id`, `name`, `description`, `is_system_role`, `created_at`
-- `[BE-DB]` Script `V002__create_users_table.sql` — columns: `id`, `email`, `username`, `password_hash`, `account_status`, `failed_login_attempts`, `created_at`, `last_login_at`
-- `[BE-DB]` Script `V003__create_user_roles_table.sql` — join table: `user_id`, `role_id`
+- `[BE-DB]` Script `V001__create_roles_table.sql` — columns: `id`, `name`, `description`, `is_system_role`, `created_at`, `updated_at`, `created_by`, `updated_by`
+- `[BE-DB]` Script `V002__create_users_table.sql` — columns: `id`, `email`, `username`, `password`, `status`, `failed_login_attempts`, `last_login_at`, `locked_at`, `created_at`, `updated_at`, `created_by`, `updated_by`
+- `[BE-DB]` Script `V003__create_user_roles_table.sql` — join table: `user_id`, `roles_id`
 - `[BE-INFRA]` EF Core `IEntityTypeConfiguration<User>`, `IEntityTypeConfiguration<Role>`, `IEntityTypeConfiguration<UserRole>`
 - `[BE-INFRA]` `IamSeeder` — seeds `ADMIN` role, `ANALYST` role, and a default admin user with hashed password on `IHostedService.StartAsync`
 - `[BE-APP]` Shared kernel: `AggregateRoot`, `ValueObject`, `DomainException` base classes; `IUnitOfWork` interface
@@ -38,7 +38,7 @@ SQL migration scripts V001–V003, EF Core configurations for `User`, `Role`, an
 - Given that the application starts for the first time against an empty database
 - When the startup sequence completes
 - Then the `roles` table contains exactly two system roles: `ADMIN` and `ANALYST`, both with `is_system_role = true`
-- And the `users` table contains a default admin user with `account_status = ACTIVE`
+- And the `users` table contains a default admin user with `status = ACTIVE`
 - And subsequent startups are idempotent (seeder does not create duplicates)
 
 ---
@@ -439,17 +439,77 @@ Endpoint `DELETE /api/users/{id}/roles/{roleName}` that removes the `user_roles`
 
 ---
 
-## Out of Scope — v1.0
+## Epic: Role Management (ADMIN only)
 
-The following stories are **not in scope for v1.0**. Roles are fixed system roles (`ADMIN`, `ANALYST`) seeded at startup. Dynamic role management is deferred to a future milestone.
+---
 
-### US-IAM-010: List all roles *(deferred)*
+### US-IAM-010: List all roles
 
-Endpoint `GET /api/roles` returning the role catalog. Not required in v1.0 since roles are seeded and known at design time.
+**Title:** Query the role catalog
 
-### US-IAM-011: Create custom role *(deferred)*
+**Description:**
+As an administrator, I want to retrieve the list of all available roles, so that I can see which roles exist in the system before assigning them to users.
 
-Endpoint `POST /api/roles` for creating custom roles with arbitrary names. Not required in v1.0; only `ADMIN` and `ANALYST` are supported.
+**Deliverable:**
+Endpoint `GET /api/roles` returning all roles in the system.
+
+**Dependencies:**
+- `TS-IAM-000`
+
+**Priority:** Medium | **Estimate:** 1 SP | **Status:** Implemented (v0.3.0)
+
+#### Tasks
+
+- `[BE-APP]` `GetAllRolesQuery` + `GetAllRolesQueryHandler`
+- `[BE-INFRA]` `RoleRepository.FindAllAsync()`
+- `[BE-INTERFACES]` `RolesController.GetAll` — `[Authorize(Roles = "ADMIN")]`
+
+#### Acceptance Criteria
+
+**Scenario 1: Successful listing**
+- Given I am an authenticated ADMIN
+- When I call `GET /api/roles`
+- Then I receive HTTP 200 with the list of all roles including `{ id, name, description, isSystemRole }`
+
+**Scenario 2: Without authentication**
+- Given I do not include a JWT token
+- When I call `GET /api/roles`
+- Then I receive HTTP 401 Unauthorized
+
+---
+
+### US-IAM-011: Create custom role
+
+**Title:** Create a new role in the system
+
+**Description:**
+As an administrator, I wasint to create a custom role with a unique name, so that I can define new permission profiles beyond the default system roles.
+
+**Deliverable:**
+Endpoint `POST /api/roles` that creates a new non-system role.
+
+**Dependencies:**
+- `TS-IAM-000`
+
+**Priority:** Medium | **Estimate:** 1 SP | **Status:** Implemented (v0.3.0)
+
+#### Tasks
+
+- `[BE-APP]` `CreateRoleCommand` + `CreateRoleCommandHandler` — validates name uniqueness, throws `RoleAlreadyExistsException` if duplicate
+- `[BE-INTERFACES]` `RolesController.Create` — `[Authorize(Roles = "ADMIN")]`; returns 201 Created
+
+#### Acceptance Criteria
+
+**Scenario 1: Successful creation**
+- Given I am an authenticated ADMIN
+- And I send `POST /api/roles` with a unique `name`
+- When the request is processed
+- Then I receive HTTP 201 Created with the new role Id
+
+**Scenario 2: Duplicate role name**
+- Given a role with the same name already exists
+- When I send `POST /api/roles` with that name
+- Then I receive HTTP 409 Conflict
 
 ---
 
@@ -462,4 +522,4 @@ Endpoint `POST /api/roles` for creating custom roles with arbitrary names. Not r
 | System roles | `ADMIN` and `ANALYST` are `IsSystemRole = true`, seeded on startup via `TS-IAM-000` |
 | Idempotency | `AssignRole` and `Activate` are idempotent — calling them multiple times does not cause errors |
 | Normalization | Role names are normalized to UPPERCASE in the domain |
-| Implementation status | All US-IAM stories implemented in v0.2.0 (auth) and v0.3.0 (users/roles) |
+| Implementation status | All US-IAM stories (including US-IAM-010 and US-IAM-011) implemented in v0.2.0 (auth) and v0.3.0 (users/roles) |
