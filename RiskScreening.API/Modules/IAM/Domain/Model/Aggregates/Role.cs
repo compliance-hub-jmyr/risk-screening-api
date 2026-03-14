@@ -12,5 +12,22 @@ public class Role : AggregateRoot
     public string Description { get; private set; } = string.Empty;
     public bool IsSystemRole { get; private set; }
 
-    private Role() { }
+    private Role()
+    {
+    }
+
+    public static Role Create(string name, string description, bool isSystemRole = false)
+    {
+        return new Role
+        {
+            Name = name.Trim().ToUpperInvariant(),
+            Description = description.Trim(),
+            IsSystemRole = isSystemRole
+        };
+    }
+
+    public void UpdateDescription(string description)
+    {
+        Description = description.Trim();
+    }
 }
