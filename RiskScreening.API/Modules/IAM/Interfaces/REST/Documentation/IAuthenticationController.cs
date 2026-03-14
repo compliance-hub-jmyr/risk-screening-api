@@ -24,4 +24,13 @@ public interface IAuthenticationController
     [SwaggerResponse(StatusCodes.Status400BadRequest, "Validation error — missing or invalid fields.")]
     [SwaggerResponse(StatusCodes.Status401Unauthorized, "Invalid credentials or account locked/suspended.")]
     Task<IActionResult> SignIn([FromBody] SignInRequest request, CancellationToken ct);
+
+    /// <summary>Get the profile of the currently authenticated user.</summary>
+    [SwaggerOperation(
+        Summary = "Get current user",
+        Description = "Returns the profile of the user identified by the JWT bearer token in the Authorization header.",
+        Tags = ["Authentication"])]
+    [SwaggerResponse(StatusCodes.Status200OK, "Profile retrieved successfully.", typeof(AuthenticatedUserResponse))]
+    [SwaggerResponse(StatusCodes.Status401Unauthorized, "Missing or invalid JWT token.")]
+    Task<IActionResult> Me(CancellationToken ct);
 }
