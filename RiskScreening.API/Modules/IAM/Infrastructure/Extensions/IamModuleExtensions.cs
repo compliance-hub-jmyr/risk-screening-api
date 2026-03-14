@@ -12,7 +12,7 @@ public static class IamModuleExtensions
     /// <summary>
     ///     Registers all IAM module services: repositories, hashing, JWT, and seeder.
     /// </summary>
-    public static WebApplicationBuilder AddIamModule(this WebApplicationBuilder builder)
+    public static void AddIamModule(this WebApplicationBuilder builder)
     {
         // Bind JWT settings from configuration
         builder.Services.Configure<JwtSettings>(
@@ -35,8 +35,6 @@ public static class IamModuleExtensions
 
         // JWT Bearer authentication — separated into its own file
         builder.Services.AddJwtBearerAuthentication(builder.Configuration);
-
-        return builder;
     }
 
     /// <summary>

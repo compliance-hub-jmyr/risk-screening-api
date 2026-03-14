@@ -10,7 +10,7 @@ namespace RiskScreening.API.Modules.IAM.Infrastructure.Security;
 /// </summary>
 internal static class JwtBearerAuthenticationExtensions
 {
-    internal static IServiceCollection AddJwtBearerAuthentication(
+    internal static void AddJwtBearerAuthentication(
         this IServiceCollection services,
         IConfiguration configuration)
     {
@@ -35,7 +35,5 @@ internal static class JwtBearerAuthenticationExtensions
             });
 
         services.AddAuthorization();
-
-        return services;
     }
 }
