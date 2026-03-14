@@ -9,7 +9,7 @@
 ## Context
 
 The platform requires developing two independent modules:
-1. A scraping API for risk lists with API Key authentication
+1. A scraping API for risk lists with JWT authentication
 2. A supplier management SPA with JWT authentication
 
 Both must coexist within the same .NET backend. Three options were evaluated:

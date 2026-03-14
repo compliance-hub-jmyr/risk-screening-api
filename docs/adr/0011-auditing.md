@@ -66,12 +66,20 @@ All domain aggregates and entities inherit these fields with zero boilerplate. A
 
 ### Layer 3 — `AppDbContext.SaveChangesAsync` override (`Shared/Infrastructure/Persistence/`)
 
-The EF Core context iterates `ChangeTracker` on every save and populates `CreatedAt`/`UpdatedAt` based on entity state:
+The EF Core context receives an optional `IHttpContextAccessor` via constructor injection (registered in `AddSharedInfrastructure()`). On every save it iterates `ChangeTracker` and stamps all four audit fields automatically:
 
 ```csharp
+public AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAccessor? httpContextAccessor = null)
+    : base(options)
+{
+    _httpContextAccessor = httpContextAccessor;
+}
+
 public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
 {
-    var now = DateTime.UtcNow;
+    var now   = DateTime.UtcNow;
+    var actor = _httpContextAccessor?.HttpContext?.User.FindFirstValue(ClaimTypes.Name);
+
     foreach (var entry in ChangeTracker.Entries<IAuditableEntity>())
     {
         switch (entry.State)
@@ -79,9 +87,16 @@ public override Task<int> SaveChangesAsync(CancellationToken cancellationToken =
             case EntityState.Added:
                 entry.CurrentValues[nameof(IAuditableEntity.CreatedAt)] = now;
                 entry.CurrentValues[nameof(IAuditableEntity.UpdatedAt)] = now;
+                if (actor is not null)
+                {
+                    entry.CurrentValues[nameof(IAuditableEntity.CreatedBy)] = actor;
+                    entry.CurrentValues[nameof(IAuditableEntity.UpdatedBy)] = actor;
+                }
                 break;
             case EntityState.Modified:
                 entry.CurrentValues[nameof(IAuditableEntity.UpdatedAt)] = now;
+                if (actor is not null)
+                    entry.CurrentValues[nameof(IAuditableEntity.UpdatedBy)] = actor;
                 break;
         }
     }
@@ -89,13 +104,9 @@ public override Task<int> SaveChangesAsync(CancellationToken cancellationToken =
 }
 ```
 
-### `CreatedBy` / `UpdatedBy` — manual assignment from application layer
+`actor` is resolved from `ClaimTypes.Name` — the claim that `JwtTokenService` embeds as the authenticated user's username. `IHttpContextAccessor` is optional so the context works correctly in seeders, migrations, and background jobs where no HTTP request is active; those writes leave `CreatedBy`/`UpdatedBy` as `null`.
 
-`AppDbContext` does **not** populate `CreatedBy`/`UpdatedBy` because:
-1. The DB context has no access to `IHttpContextAccessor` or JWT claims by design — mixing infrastructure concerns.
-2. Not all writes have an authenticated user (e.g., the IAM seeder runs at startup).
-
-Instead, MediatR command handlers that have access to the current user identity (via `ICurrentUserService` or `ClaimsPrincipal` injected from `IHttpContextAccessor`) assign these fields explicitly on the aggregate before calling `SaveChangesAsync`.
+**Handlers do not need to assign actor fields manually** — `AppDbContext` handles it transparently for all modules.
 
 **Known limitation:** `CreatedBy`/`UpdatedBy` are `null` for system-initiated writes (seed data, background jobs). This is intentional and acceptable.
 
@@ -107,10 +118,11 @@ Instead, MediatR command handlers that have access to the current user identity 
 
 | Pros | Cons |
 |------|------|
-| Zero boilerplate per entity | Requires inheriting from base class (minor coupling) |
-| Single enforcement point in `AppDbContext` | `CreatedBy`/`UpdatedBy` not auto-populated by `AppDbContext` (by design — requires handler context) |
+| Zero boilerplate per entity — timestamps and actor stamped automatically | Requires inheriting from base class (minor coupling) |
+| Single enforcement point in `AppDbContext` | |
 | Full audit contract on `IAuditableEntity` — all four fields readable without casting | |
 | Works for all entities/aggregates automatically | |
+| `CreatedBy`/`UpdatedBy` stamped automatically via `IHttpContextAccessor` — zero handler boilerplate | |
 
 ### Option B — EF Core shadow properties only
 
@@ -143,8 +155,9 @@ Instead, MediatR command handlers that have access to the current user identity 
 ### Positive
 - Every new aggregate and entity gets `CreatedAt`/`UpdatedAt` for free by extending `AggregateRoot` or `Entity<TId>`.
 - `IAuditableEntity` keeps the domain model decoupled from EF Core.
-- `AppDbContext` is the single authoritative source for timestamp stamping — no scattered assignments across handlers.
-- `CreatedBy`/`UpdatedBy` are present on all models and can be populated selectively by handlers with user context.
+- `AppDbContext` is the single authoritative source for all four audit fields — no scattered assignments across handlers.
+- `CreatedBy`/`UpdatedBy` are automatically stamped from the JWT `ClaimTypes.Name` claim; handlers require zero boilerplate.
+- System writes (seeders, background jobs) safely leave `CreatedBy`/`UpdatedBy` as `null` without any special handling.
 
 ### Negative / Mitigations
 
@@ -158,7 +171,7 @@ Instead, MediatR command handlers that have access to the current user identity 
 
 ## Dependencies
 
-No additional packages. `IAuditableEntity`, `AggregateRoot`, `Entity<TId>`, and `AppDbContext` are all part of the Shared kernel in `RiskScreening.API/Shared/`.
+No additional packages. `IAuditableEntity`, `AggregateRoot`, `Entity<TId>`, and `AppDbContext` are all part of the Shared kernel in `RiskScreening.API/Shared/`. `IHttpContextAccessor` is provided by `Microsoft.AspNetCore.Http` (already part of the ASP.NET Core SDK) and registered via `builder.Services.AddHttpContextAccessor()` in `AddSharedInfrastructure()`.
 
 ---
 

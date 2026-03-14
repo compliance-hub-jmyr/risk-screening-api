@@ -65,22 +65,6 @@ Si un fetch en vivo falla (timeout, error HTTP, error de parsing):
   - La próxima solicitud reintentará el fetch en vivo
 ```
 
-### Endpoint de estado
-
-```http
-GET /api/lists/status
-```
-
-Retorna el estado del cache por fuente:
-
-```json
-{
-  "ofac":      { "strategy": "ON_DEMAND", "ttlMinutes": 60 },
-  "worldBank": { "strategy": "ON_DEMAND", "ttlMinutes": 120 },
-  "icij":      { "strategy": "ON_DEMAND", "ttlMinutes": 15 }
-}
-```
-
 ## Consecuencias
 
 **Positivas:**
@@ -95,7 +79,6 @@ Retorna el estado del cache por fuente:
 
 **Mitigación:**
 - Usar políticas de retry y timeout de `Polly` en todos los clientes HTTP para reducir el impacto de fallos transitorios
-- Un endpoint `GET /api/lists/status` permite a los operadores conocer el estado del cache
 - **Fase 2 (futuro):** Reemplazar el fetch bajo demanda para OFAC y World Bank con un `BackgroundService` que pre-pueble el cache al inicio y se refresque periódicamente. ICIJ permanece siempre bajo demanda (tamaño del dataset, diseño de la API pública). Esta mejora se difiere intencionalmente para evitar sobre-ingeniería en la Fase 1.
 
 ## Dependencias

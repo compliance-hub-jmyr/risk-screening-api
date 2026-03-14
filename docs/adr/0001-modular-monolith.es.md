@@ -9,7 +9,7 @@
 ## Contexto
 
 La plataforma requiere desarrollar dos modulos independientes:
-1. Un API de scraping de listas de riesgo con autenticacion por API Key
+1. Un API de scraping de listas de riesgo con autenticacion JWT
 2. Una SPA de gestion de proveedores con autenticacion JWT
 
 Ambos deben convivir en el mismo backend .NET. Se evaluaron tres opciones:

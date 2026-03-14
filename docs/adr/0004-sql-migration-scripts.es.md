@@ -29,8 +29,8 @@ Migrations/Scripts/
   V001__create_roles_table.sql
   V002__create_users_table.sql
   V003__create_user_roles_table.sql
-  V004__create_suppliers_table.sql      (futuro)
-  V005__create_screening_tables.sql     (futuro)
+  V005__create_suppliers_table.sql
+  V006__create_screening_results_table.sql
 ```
 
 Formato: `V{número:000}__{descripción_snake_case}.sql`

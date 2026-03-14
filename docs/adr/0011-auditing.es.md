@@ -66,12 +66,20 @@ Todos los aggregates y entidades de dominio heredan estos campos con cero boiler
 
 ### Capa 3 — Override de `AppDbContext.SaveChangesAsync` (`Shared/Infrastructure/Persistence/`)
 
-El contexto de EF Core itera el `ChangeTracker` en cada guardado y puebla `CreatedAt`/`UpdatedAt` según el estado de la entidad:
+El contexto de EF Core recibe un `IHttpContextAccessor` opcional vía inyección de constructor (registrado en `AddSharedInfrastructure()`). En cada guardado itera el `ChangeTracker` y sella automáticamente los cuatro campos de auditoría:
 
 ```csharp
+public AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAccessor? httpContextAccessor = null)
+    : base(options)
+{
+    _httpContextAccessor = httpContextAccessor;
+}
+
 public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
 {
-    var now = DateTime.UtcNow;
+    var now   = DateTime.UtcNow;
+    var actor = _httpContextAccessor?.HttpContext?.User.FindFirstValue(ClaimTypes.Name);
+
     foreach (var entry in ChangeTracker.Entries<IAuditableEntity>())
     {
         switch (entry.State)
@@ -79,9 +87,16 @@ public override Task<int> SaveChangesAsync(CancellationToken cancellationToken =
             case EntityState.Added:
                 entry.CurrentValues[nameof(IAuditableEntity.CreatedAt)] = now;
                 entry.CurrentValues[nameof(IAuditableEntity.UpdatedAt)] = now;
+                if (actor is not null)
+                {
+                    entry.CurrentValues[nameof(IAuditableEntity.CreatedBy)] = actor;
+                    entry.CurrentValues[nameof(IAuditableEntity.UpdatedBy)] = actor;
+                }
                 break;
             case EntityState.Modified:
                 entry.CurrentValues[nameof(IAuditableEntity.UpdatedAt)] = now;
+                if (actor is not null)
+                    entry.CurrentValues[nameof(IAuditableEntity.UpdatedBy)] = actor;
                 break;
         }
     }
@@ -89,15 +104,11 @@ public override Task<int> SaveChangesAsync(CancellationToken cancellationToken =
 }
 ```
 
-### `CreatedBy` / `UpdatedBy` — asignación manual desde la capa de aplicación
+`actor` se resuelve desde `ClaimTypes.Name` — el claim que `JwtTokenService` embebe como el username del usuario autenticado. `IHttpContextAccessor` es opcional para que el contexto funcione correctamente en seeders, migraciones y background jobs donde no hay una solicitud HTTP activa; esas escrituras dejan `CreatedBy`/`UpdatedBy` como `null`.
 
-`AppDbContext` **no puebla** `CreatedBy`/`UpdatedBy` porque:
-1. El contexto DB no tiene acceso a `IHttpContextAccessor` ni a claims JWT por diseño — mezclaría concerns de infraestructura.
-2. No todas las escrituras tienen un usuario autenticado (ej: el seeder de IAM se ejecuta al arranque).
+**Los handlers no necesitan asignar los campos de actor manualmente** — `AppDbContext` lo maneja de forma transparente para todos los módulos.
 
-En cambio, los handlers de comandos MediatR que tienen acceso a la identidad del usuario actual (via `ICurrentUserService` o `ClaimsPrincipal` inyectado desde `IHttpContextAccessor`) asignan estos campos explícitamente en el aggregate antes de llamar a `SaveChangesAsync`.
-
-**Limitación conocida:** `CreatedBy`/`UpdatedBy` son `null` para escrituras iniciadas por el sistema (datos seed, jobs en segundo plano). Esto es intencional y aceptable.
+**Limitación conocida:** `CreatedBy`/`UpdatedBy` son `null` para escrituras iniciadas por el sistema (datos seed, background jobs). Esto es intencional y aceptable.
 
 ---
 
@@ -107,10 +118,11 @@ En cambio, los handlers de comandos MediatR que tienen acceso a la identidad del
 
 | Ventajas | Desventajas |
 |----------|-------------|
-| Cero boilerplate por entidad | Requiere heredar de la clase base (acoplamiento menor) |
-| Punto de enforcement único en `AppDbContext` | `CreatedBy`/`UpdatedBy` no se pueblan automáticamente por `AppDbContext` (por diseño — requiere contexto del handler) |
+| Cero boilerplate por entidad — timestamps y actor sellados automáticamente | Requiere heredar de la clase base (acoplamiento menor) |
+| Punto de enforcement único en `AppDbContext` | |
 | Contrato de auditoría completo en `IAuditableEntity` — los cuatro campos accesibles sin cast | |
 | Funciona para todas las entidades/aggregates automáticamente | |
+| `CreatedBy`/`UpdatedBy` sellados automáticamente via `IHttpContextAccessor` — cero boilerplate en handlers | |
 
 ### Opción B — Solo shadow properties de EF Core
 
@@ -143,8 +155,9 @@ En cambio, los handlers de comandos MediatR que tienen acceso a la identidad del
 ### Positivas
 - Cada nuevo aggregate y entidad obtiene `CreatedAt`/`UpdatedAt` gratis al extender `AggregateRoot` o `Entity<TId>`.
 - `IAuditableEntity` mantiene el modelo de dominio desacoplado de EF Core.
-- `AppDbContext` es la fuente autoritativa única para el sellado de timestamps — sin asignaciones dispersas en handlers.
-- `CreatedBy`/`UpdatedBy` están presentes en todos los modelos y pueden poblarse selectivamente por handlers con contexto de usuario.
+- `AppDbContext` es la fuente autoritativa única para los cuatro campos de auditoría — sin asignaciones dispersas en handlers.
+- `CreatedBy`/`UpdatedBy` se sellan automáticamente desde el claim JWT `ClaimTypes.Name`; los handlers no requieren ningún boilerplate.
+- Las escrituras del sistema (seeders, background jobs) dejan `CreatedBy`/`UpdatedBy` como `null` de forma segura sin ningún manejo especial.
 
 ### Negativas / Mitigaciones
 
@@ -158,7 +171,7 @@ En cambio, los handlers de comandos MediatR que tienen acceso a la identidad del
 
 ## Dependencias
 
-Sin paquetes adicionales. `IAuditableEntity`, `AggregateRoot`, `Entity<TId>` y `AppDbContext` forman parte del kernel Shared en `RiskScreening.API/Shared/`.
+Sin paquetes adicionales. `IAuditableEntity`, `AggregateRoot`, `Entity<TId>` y `AppDbContext` forman parte del kernel Shared en `RiskScreening.API/Shared/`. `IHttpContextAccessor` es proporcionado por `Microsoft.AspNetCore.Http` (ya parte del SDK de ASP.NET Core) y registrado via `builder.Services.AddHttpContextAccessor()` en `AddSharedInfrastructure()`.
 
 ---
 

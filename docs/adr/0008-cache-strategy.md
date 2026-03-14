@@ -40,7 +40,7 @@ Examples:
 | `scraping:ofac:{query}` | 60 min | OFAC SDN result for a given query term |
 | `scraping:worldbank:{query}` | 120 min | World Bank result for a given query term |
 | `scraping:icij:{query}` | 15 min | ICIJ Offshore Leaks result for a given query term |
-| `rate_limit:{apiKey}` | 60 s (sliding) | Rate-limiting window per API key |
+| `rate_limit:{clientIp}` | 60 s (sliding) | Rate-limiting window per client IP |
 
 ### TTL strategy
 
