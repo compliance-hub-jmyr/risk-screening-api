@@ -36,24 +36,22 @@ This approach is simpler to implement and operate in Phase 1, avoids the complex
 ### Strategy by source
 
 #### OFAC SDN
-- Source: `https://www.treasury.gov/ofac/downloads/sdn.xml` (public XML)
-- Method: Download and XML parsing with `System.Xml.Linq`
+- Source: `https://sdn.ofac.treas.gov/SDN_XML.zip` (public ZIP containing SDN XML)
+- Method: Download ZIP, decompress in-memory, parse XML with `System.Xml.Linq`
 - Cache key: `scraping:ofac:{normalizedQuery}`
-- TTL: **60 minutes**
+- TTL: **10 minutes**
 
 #### World Bank Debarred Firms
-- Source: `https://projects.worldbank.org/en/projects-operations/procurement/debarred-firms`
+- Source: `https://projects.worldbank.org/en/projects-operations/procurement/debarred-firms?srchTerm={query}`
 - Method: HTTP GET + HTML table parsing with `HtmlAgilityPack`
-- Pagination: the table has multiple pages — the client iterates to the last one
 - Cache key: `scraping:worldbank:{normalizedQuery}`
-- TTL: **120 minutes** (data changes less frequently)
+- TTL: **10 minutes**
 
 #### ICIJ Offshore Leaks
-- Source: `https://offshoreleaks.icij.org/api/nodes` (public REST API)
-- Method: HTTP GET with parameters `?q={query}` (real-time per-query search)
-- Always on-demand — the dataset is too large to cache in full; the public API supports per-query search natively
+- Source: `https://offshoreleaks.icij.org/api/nodes?q={query}` (public REST API)
+- Method: HTTP GET — real-time per-query search; the public API supports per-query search natively
 - Cache key: `scraping:icij:{normalizedQuery}`
-- TTL: **15 minutes**
+- TTL: **10 minutes**
 
 ### Error handling
 

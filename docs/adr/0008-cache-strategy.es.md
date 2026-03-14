@@ -37,9 +37,9 @@ Ejemplos:
 
 | Clave | TTL | Descripción |
 |-------|-----|-------------|
-| `scraping:ofac:{consulta}` | 60 min | Resultado OFAC SDN para un término de búsqueda dado |
-| `scraping:worldbank:{consulta}` | 120 min | Resultado World Bank para un término de búsqueda dado |
-| `scraping:icij:{consulta}` | 15 min | Resultado ICIJ Offshore Leaks para un término de búsqueda dado |
+| `scraping:ofac:{consulta}` | 10 min | Resultado OFAC SDN para un término de búsqueda dado |
+| `scraping:worldbank:{consulta}` | 10 min | Resultado World Bank para un término de búsqueda dado |
+| `scraping:icij:{consulta}` | 10 min | Resultado ICIJ Offshore Leaks para un término de búsqueda dado |
 | `rate_limit:{clientIp}` | 60 s (deslizante) | Ventana de rate limiting por IP del cliente |
 
 ### Estrategia de TTL

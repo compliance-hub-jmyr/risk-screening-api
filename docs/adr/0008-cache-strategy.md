@@ -37,9 +37,9 @@ Examples:
 
 | Key | TTL | Description |
 |-----|-----|-------------|
-| `scraping:ofac:{query}` | 60 min | OFAC SDN result for a given query term |
-| `scraping:worldbank:{query}` | 120 min | World Bank result for a given query term |
-| `scraping:icij:{query}` | 15 min | ICIJ Offshore Leaks result for a given query term |
+| `scraping:ofac:{query}` | 10 min | OFAC SDN result for a given query term |
+| `scraping:worldbank:{query}` | 10 min | World Bank result for a given query term |
+| `scraping:icij:{query}` | 10 min | ICIJ Offshore Leaks result for a given query term |
 | `rate_limit:{clientIp}` | 60 s (sliding) | Rate-limiting window per client IP |
 
 ### TTL strategy

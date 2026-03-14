@@ -36,24 +36,22 @@ Este enfoque es más simple de implementar y operar en la Fase 1, evita la compl
 ### Estrategia por fuente
 
 #### OFAC SDN
-- Fuente: `https://www.treasury.gov/ofac/downloads/sdn.xml` (XML público)
-- Método: Descarga y parsing XML con `System.Xml.Linq`
+- Fuente: `https://sdn.ofac.treas.gov/SDN_XML.zip` (ZIP público con XML SDN)
+- Método: Descarga ZIP, descompresión en memoria, parsing XML con `System.Xml.Linq`
 - Clave de cache: `scraping:ofac:{consultaNormalizada}`
-- TTL: **60 minutos**
+- TTL: **10 minutos**
 
 #### World Bank Debarred Firms
-- Fuente: `https://projects.worldbank.org/en/projects-operations/procurement/debarred-firms`
+- Fuente: `https://projects.worldbank.org/en/projects-operations/procurement/debarred-firms?srchTerm={consulta}`
 - Método: HTTP GET + parsing de tabla HTML con `HtmlAgilityPack`
-- Paginación: la tabla tiene múltiples páginas — el cliente itera hasta la última
 - Clave de cache: `scraping:worldbank:{consultaNormalizada}`
-- TTL: **120 minutos** (los datos cambian con menor frecuencia)
+- TTL: **10 minutos**
 
 #### ICIJ Offshore Leaks
-- Fuente: `https://offshoreleaks.icij.org/api/nodes` (API REST pública)
-- Método: HTTP GET con parámetros `?q={consulta}` (búsqueda en tiempo real por consulta)
-- Siempre bajo demanda — el dataset es demasiado grande para cachear completo; la API pública soporta búsqueda por consulta de forma nativa
+- Fuente: `https://offshoreleaks.icij.org/api/nodes?q={consulta}` (API REST pública)
+- Método: HTTP GET — búsqueda en tiempo real por consulta; la API pública soporta búsqueda por consulta de forma nativa
 - Clave de cache: `scraping:icij:{consultaNormalizada}`
-- TTL: **15 minutos**
+- TTL: **10 minutos**
 
 ### Manejo de errores
 
