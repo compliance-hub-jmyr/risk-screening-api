@@ -20,7 +20,7 @@ public static class WebApplicationBuilderExtensions
     /// </summary>
     /// <param name="builder">The web application builder to configure.</param>
     /// <returns>The same <see cref="WebApplicationBuilder"/> instance to allow method chaining.</returns>
-    public static WebApplicationBuilder AddSharedInfrastructure(this WebApplicationBuilder builder)
+    public static void AddSharedInfrastructure(this WebApplicationBuilder builder)
     {
         builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
@@ -36,15 +36,13 @@ public static class WebApplicationBuilderExtensions
         builder.Services.AddExceptionHandler<ValidationExceptionHandler>();
         builder.Services.AddExceptionHandler<DomainExceptionHandler>();
         builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
-
-        return builder;
     }
 
     /// <summary>
     ///     Registers API versioning using a header-based strategy via the <c>Api-Version</c> header.
     ///     Default version is <c>1.0</c> — clients that omit the header receive V1.
     /// </summary>
-    public static WebApplicationBuilder AddApiVersioning(this WebApplicationBuilder builder)
+    public static void AddApiVersioning(this WebApplicationBuilder builder)
     {
         builder.Services.AddApiVersioning(options =>
             {
@@ -58,8 +56,29 @@ public static class WebApplicationBuilderExtensions
                 options.GroupNameFormat = "'v'VVV";
                 options.SubstituteApiVersionInUrl = true;
             });
+    }
 
-        return builder;
+    /// <summary>
+    ///     Registers the CORS policy named <c>AllowAllPolicy</c>.
+    ///     Allowed origins are read from <c>Cors:AllowedOrigins</c> in configuration.
+    ///     Falls back to allowing any origin if no origins are configured (development only).
+    /// </summary>
+    /// <param name="builder">The web application builder to configure.</param>
+    /// <returns>The same <see cref="WebApplicationBuilder"/> instance to allow method chaining.</returns>
+    public static void AddCorsPolicy(this WebApplicationBuilder builder)
+    {
+        var settings = builder.Configuration.GetSection("Cors").Get<CorsSettings>() ?? new CorsSettings();
+
+        builder.Services.AddCors(options =>
+        {
+            options.AddPolicy("AllowAllPolicy", policy =>
+            {
+                if (settings.AllowedOrigins.Length > 0)
+                    policy.WithOrigins(settings.AllowedOrigins).AllowAnyMethod().AllowAnyHeader();
+                else
+                    policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader();
+            });
+        });
     }
 
     /// <summary>
@@ -75,7 +94,7 @@ public static class WebApplicationBuilderExtensions
     ///     The assemblies to scan for MediatR handlers and FluentValidation validators.
     /// </param>
     /// <returns>The same <see cref="WebApplicationBuilder"/> instance to allow method chaining.</returns>
-    public static WebApplicationBuilder AddMediator(this WebApplicationBuilder builder, params Type[] assemblies)
+    public static void AddMediator(this WebApplicationBuilder builder, params Type[] assemblies)
     {
         var assemblyArray = assemblies.Select(t => t.Assembly).ToArray();
 
@@ -87,7 +106,5 @@ public static class WebApplicationBuilderExtensions
         });
 
         builder.Services.AddValidatorsFromAssemblies(assemblyArray);
-
-        return builder;
     }
 }

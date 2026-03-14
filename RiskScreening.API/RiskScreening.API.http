@@ -1,6 +1,11 @@
-@RiskScreening.API_HostAddress = http://localhost:5215
+### Sign In
+POST http://localhost:5215/api/authentication/sign-in
+Api-Version: 1
+Content-Type: application/json
 
-GET {{RiskScreening.API_HostAddress}}/weatherforecast/
-Accept: application/json
+{
+  "email": "admin@riskscreening.com",
+  "password": "Admin123!"
+}
 
 ###

@@ -18,21 +18,19 @@ public static class WebApplicationExtensions
     ///     Should only be called in non-production environments.
     ///     Wrap with <c>if (app.Environment.IsDevelopment())</c> or similar.
     /// </remarks>
-    public static WebApplication UseOpenApiDocumentation(this WebApplication app)
+    public static void UseOpenApiDocumentation(this WebApplication app)
     {
         app.MapOpenApi();
         app.UseSwagger();
         app.UseSwaggerUI();
-        return app;
     }
 
     /// <summary>
     ///     Applies the <c>AllowAllPolicy</c> CORS policy registered by
     ///     <c>AddCorsPolicy</c>.
     /// </summary>
-    public static WebApplication UseCorsPolicy(this WebApplication app)
+    public static void UseCorsPolicy(this WebApplication app)
     {
         app.UseCors("AllowAllPolicy");
-        return app;
     }
 }
