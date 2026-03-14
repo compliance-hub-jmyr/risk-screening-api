@@ -25,9 +25,9 @@ public static class WebApplicationBuilderExtensions
     {
         builder.Host.UseSerilog((ctx, config) =>
             config.ReadFrom.Configuration(ctx.Configuration)
-                  .Enrich.FromLogContext()
-                  .Enrich.WithProperty("Application", "RiskScreening.API")
-                  .WriteTo.Console());
+                .Enrich.FromLogContext()
+                .Enrich.WithProperty("Application", "RiskScreening.API")
+                .WriteTo.Console());
     }
 
     /// <summary>

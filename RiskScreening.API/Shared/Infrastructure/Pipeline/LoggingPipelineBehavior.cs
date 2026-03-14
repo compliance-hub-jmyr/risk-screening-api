@@ -43,7 +43,8 @@ public class LoggingPipelineBehavior<TRequest, TResponse>(ILogger<LoggingPipelin
         {
             stopwatch.Stop();
 
-            logger.LogWarning("Domain rule violated handling {RequestName} after {ElapsedMilliseconds}ms — [{ErrorCode}] {Message}",
+            logger.LogWarning(
+                "Domain rule violated handling {RequestName} after {ElapsedMilliseconds}ms — [{ErrorCode}] {Message}",
                 requestName, stopwatch.ElapsedMilliseconds, ex.ErrorCode, ex.Message);
 
             throw;
