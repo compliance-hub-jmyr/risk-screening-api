@@ -77,24 +77,4 @@ public static class WebApplicationBuilderExtensions
             options.DocumentFilter<ErrorResponseDocumentFilter>();
         });
     }
-
-    /// <summary>
-    ///     Registers a permissive CORS policy named <c>AllowAllPolicy</c>.
-    ///     Allows any origin, method, and header.
-    /// </summary>
-    /// <remarks>
-    ///     This policy is intended for development and internal APIs only.
-    ///     Restrict origins in production environments.
-    /// </remarks>
-    public static void AddCorsPolicy(this WebApplicationBuilder builder)
-    {
-        builder.Services.AddCors(options =>
-        {
-            options.AddPolicy("AllowAllPolicy",
-                policy => policy
-                    .AllowAnyOrigin()
-                    .AllowAnyMethod()
-                    .AllowAnyHeader());
-        });
-    }
 }
