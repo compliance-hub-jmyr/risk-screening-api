@@ -1,0 +1,154 @@
+openapi: 3.1.0
+info:
+  title: Risk Screening Platform — IAM Module
+  version: 1.0.0
+  description: |
+    API de Identity & Access Management para la plataforma Risk Screening.
+
+    ## Autenticacion
+    Los endpoints protegidos requieren un JWT Bearer token obtenido via `POST /api/authentication/sign-in`.
+
+    ## Usuarios por defecto
+    El sistema crea automaticamente al inicio:
+    - **Admin**: email `admin@riskscreening.com`, password `Admin123!`
+
+    ## Roles del sistema
+    - `ADMIN`: Acceso completo — gestion de usuarios, roles y plataforma
+    - `ANALYST`: Acceso a funciones de compliance — screening y gestion de proveedores
+  contact:
+    name: EY Technical Assessment
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:5215
+    description: Local Development (dotnet run)
+
+security:
+  - BearerAuth: []
+
+tags:
+  - name: Authentication
+    description: Login y perfil del usuario autenticado
+
+paths:
+  /api/authentication/sign-in:
+    post:
+      summary: Iniciar sesion
+      description: |
+        Autentica con email y password. Devuelve un JWT Bearer token.
+
+        **Errores posibles:**
+        - 400: Campos faltantes o formato de email invalido
+        - 401: Credenciales incorrectas, cuenta bloqueada o suspendida
+      tags: [Authentication]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignInRequest'
+            example:
+              email: admin@riskscreening.com
+              password: Admin123!
+      responses:
+        '200':
+          description: Autenticacion exitosa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticatedUserResponse'
+              example:
+                id: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+                email: admin@riskscreening.com
+                username: admin
+                status: Active
+                roles: [ADMIN]
+                token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtenido via POST /api/authentication/sign-in
+
+  schemas:
+    SignInRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          description: Email del usuario registrado
+        password:
+          type: string
+          description: Password del usuario
+
+    AuthenticatedUserResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Identificador unico del usuario autenticado
+        email:
+          type: string
+          format: email
+          description: Email del usuario autenticado
+        username:
+          type: string
+          description: Nombre de usuario
+        status:
+          type: string
+          enum: [Active, Suspended, Locked]
+          description: Estado actual de la cuenta
+        roles:
+          type: array
+          items:
+            type: string
+          description: Roles asignados al usuario
+          example: [ADMIN]
+        token:
+          type: string
+          description: JWT Bearer token para incluir en el header Authorization
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        errors:
+          type: object
+          additionalProperties:
+            type: string
+          nullable: true
+
+  responses:
+    BadRequest:
+      description: Validacion fallida — campos faltantes o con formato incorrecto
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: Validation failed
+            errors:
+              email: Email must be a valid email address
+              password: Password is required
+
+    Unauthorized:
+      description: Token JWT ausente, invalido o expirado — o credenciales incorrectas
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: Unauthorized
