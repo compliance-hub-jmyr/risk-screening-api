@@ -1,4 +1,4 @@
-# ADR-0003: Dual Authentication — JWT Bearer + API Key
+# ADR-0003: Authentication — JWT Bearer
 
 ## Status
 `Accepted` — Implemented in v0.2.0
@@ -8,9 +8,9 @@
 
 ## Context
 
-The platform has two types of consumers with different needs:
+The platform serves two types of consumers:
 
-1. **Scraping Module (lists API):** API consumers that need programmatic access without a user session. Requires authentication via API Key in the `X-Api-Key` header.
+1. **Scraping Module (lists API):** Programmatic access to query high-risk lists. Initially considered an API Key scheme for this module; however, the specification does not require API keys — all endpoints on the platform are consumed by authenticated users or the SPA.
 
 2. **Suppliers Module / SPA:** Human users who log in with email/password and maintain an active session in the browser.
 
@@ -18,15 +18,20 @@ An authentication strategy is needed that supports both cases without external i
 
 ## Decision
 
-Implement **two independent authentication schemes in ASP.NET Core**:
+Use a **single authentication scheme: JWT Bearer** for all API endpoints, including the Scraping module.
 
-### Scheme 1: JWT Bearer (SPA)
+The API Key approach was considered and an initial implementation was built (`ApiKeyAuthHandler`, `api_keys` table, `V004__create_api_keys_table.sql`) but **discarded** because:
+- The spec does not require a separate machine-to-machine auth mechanism.
+- All scraping endpoints are consumed either by the SPA (which already holds a JWT) or by developers testing via Swagger (which supports Bearer auth natively).
+- A second auth scheme adds unnecessary complexity and a DB table with no functional benefit.
 
-- The user logs in via `POST /api/authentication/sign-in`
+### JWT Bearer Authentication
+
+- The user authenticates via `POST /api/authentication/sign-in`
 - The server generates an HS256 JWT signed with the configured secret key
 - The token includes claims: `sub` (userId), `email`, `name`, roles
 - Expiration: configurable via `Jwt:ExpirationHours` (default: 24h)
-- Suppliers module endpoints use `[Authorize]` (Bearer scheme)
+- **All** module endpoints (IAM, Scraping, Suppliers) use `[Authorize]` (Bearer scheme)
 
 ```csharp
 // JWT Claims included
@@ -34,18 +39,6 @@ new Claim(ClaimTypes.NameIdentifier, user.Id)
 new Claim(ClaimTypes.Email, user.Email.Value)
 new Claim(ClaimTypes.Name, user.Username.Value)
 new Claim(ClaimTypes.Role, role.Name)  // one per role
-```
-
-### Scheme 2: API Key (Scraping)
-
-- API keys are generated and stored as hashes in the database (`api_keys` table)
-- The consumer sends the key in the `X-Api-Key` header
-- Implemented as an ASP.NET Core `AuthenticationHandler`
-- Scraping module endpoints use `[Authorize(AuthenticationSchemes = "ApiKey")]`
-
-```http
-GET /api/lists/ofac?query=John HTTP/1.1
-X-Api-Key: ey-test-key-abc123
 ```
 
 ### Password Security
@@ -57,14 +50,14 @@ X-Api-Key: ey-test-key-abc123
 ## Consequences
 
 **Positive:**
-- Clean separation of the two authentication types without collision
+- Single, unified auth mechanism — less code, less cognitive overhead
 - JWT is stateless — the server does not need to store sessions
-- API Keys are simple to use for programmatic integrations
+- Swagger UI can test all endpoints with a single Bearer token
 - BCrypt is the standard for password hashing — resistant to rainbow tables
 
 **Negative:**
 - JWT cannot be revoked without implementing a blacklist (acceptable for this project)
-- API Keys in plaintext in the header can be intercepted if HTTPS is not used (use HTTPS in production)
+- All endpoints require a valid JWT — no anonymous or API-key-based access
 
 **Mitigation:**
 - In production, configure `UseHttpsRedirection()` and an SSL certificate

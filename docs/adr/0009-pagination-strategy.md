@@ -61,7 +61,7 @@ All paginated endpoints return a `PageResponse<T>` envelope:
 ### Shared placement
 
 `PageResponse<T>`, `PageMetadata`, and `PageRequest` live in `Shared/Domain` and are used by:
-- **Suppliers module** — `GET /api/v1/suppliers`
+- **Suppliers module** — `GET /api/suppliers`
 - **Scraping module** — all three list endpoints (`/lists/ofac`, `/lists/worldbank`, `/lists/icij`)
 
 ---

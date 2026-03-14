@@ -14,7 +14,7 @@ Se necesita una estrategia de rate limiting que:
 - Sea precisa (evite bursts al inicio de cada minuto)
 - No requiera infraestructura externa para el entorno de desarrollo
 - Sea fácil de configurar y monitorear
-- Esté particionada por API key (cada consumidor tiene su propia cuota)
+- Esté particionada por IP del cliente (dado que todos los endpoints están protegidos por JWT, no existe una API key para particionar)
 
 Se evaluaron las siguientes opciones:
 
@@ -26,12 +26,14 @@ Se evaluaron las siguientes opciones:
 
 ## Decisión
 
-Usar **`AspNetCoreRateLimit`** (paquete NuGet `AspNetCoreRateLimit 5.0.0`) configurado como rate limiting basado en cliente, particionado por el header `X-Api-Key`.
+Usar **`AspNetCoreRateLimit`** (paquete NuGet `AspNetCoreRateLimit 5.0.0`) configurado como rate limiting basado en cliente, particionado por dirección IP del cliente.
 
 Se eligió `AspNetCoreRateLimit` sobre el `SlidingWindowRateLimiter` nativo porque:
 - Las reglas de política son declarativas en `appsettings.json` — no se requiere cambio de código para ajustar los límites
 - Soporta overrides por cliente (`ClientRateLimitPolicies`) de forma nativa
 - Paquete maduro con uso extensivo en producción en APIs ASP.NET
+
+> **Nota:** El diseño inicial particionaba por el header `X-Api-Key`. Dado que la autenticación por API Key fue eliminada (ver [ADR-0003](./0003-jwt-authentication.es.md)), la partición se realiza ahora por IP del cliente (`ClientIdHeader: "X-Forwarded-For"`). El límite aplica únicamente a `/api/lists/*`.
 
 ### Configuración en `appsettings.json`
 
@@ -40,7 +42,7 @@ Se eligió `AspNetCoreRateLimit` sobre el `SlidingWindowRateLimiter` nativo porq
   "ClientRateLimiting": {
     "EnableEndpointRateLimiting": true,
     "StackBlockedRequests": false,
-    "ClientIdHeader": "X-Api-Key",
+    "ClientIdHeader": "X-Forwarded-For",
     "HttpStatusCode": 429,
     "GeneralRules": [
       {
@@ -78,7 +80,7 @@ Retry-After: 30
 Content-Type: application/json
 
 {
-  "message": "API calls quota exceeded. Maximum 20 requests per 1m per API key."
+  "message": "API calls quota exceeded. Maximum 20 requests per 1m."
 }
 ```
 
@@ -86,7 +88,6 @@ Content-Type: application/json
 
 **Positivo:**
 - Las reglas son completamente declarativas en `appsettings.json` — ajustables sin recompilar
-- `ClientIdHeader: "X-Api-Key"` particiona la cuota de cada consumidor automáticamente
 - `EnableEndpointRateLimiting: true` limita el scope a `/api/lists/*` solamente — otros endpoints no se ven afectados
 - Header `Retry-After` estándar (RFC 6585) en la respuesta 429
 - Contadores en memoria — no se requiere Redis para la Fase 1
@@ -94,6 +95,7 @@ Content-Type: application/json
 **Negativo:**
 - Estado en memoria — si múltiples instancias de la API corren detrás de un load balancer, cada instancia tiene su propio contador (el límite no se comparte entre instancias)
 - Los contadores se pierden al reiniciar la API
+- La partición por IP puede ser evadida via proxies (aceptable para la Fase 1)
 
 **Mitigación para producción con múltiples instancias:**
 - Reemplazar `MemoryCacheRateLimitCounterStore` con una implementación respaldada por Redis
@@ -103,7 +105,7 @@ Content-Type: application/json
 
 | Paquete | Versión | Propósito |
 |---------|---------|-----------|
-| `AspNetCoreRateLimit` | 5.0.0 | Middleware de rate limiting basado en cliente con cuotas por key |
+| `AspNetCoreRateLimit` | 5.0.0 | Middleware de rate limiting basado en cliente con cuotas por IP |
 
 ## Referencias
 - [AspNetCoreRateLimit en GitHub](https://github.com/stefanprodan/AspNetCoreRateLimit)

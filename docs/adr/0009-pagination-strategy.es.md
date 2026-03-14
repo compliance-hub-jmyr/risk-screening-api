@@ -61,7 +61,7 @@ Los campos de `PageMetadata` son pre-calculados en el servidor para que el clien
 ### Ubicación en Shared
 
 `PageResponse<T>`, `PageMetadata` y `PageRequest` viven en `Shared/Domain` y son usados por:
-- **Módulo Suppliers** — `GET /api/v1/suppliers`
+- **Módulo Suppliers** — `GET /api/suppliers`
 - **Módulo Scraping** — los tres endpoints de listas (`/lists/ofac`, `/lists/worldbank`, `/lists/icij`)
 
 ---

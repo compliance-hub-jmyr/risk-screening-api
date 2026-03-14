@@ -1,4 +1,4 @@
-# ADR-0003: Autenticacion Dual — JWT Bearer + API Key
+# ADR-0003: Autenticación — JWT Bearer
 
 ## Estado
 `Accepted` — Implementado en v0.2.0
@@ -8,25 +8,30 @@
 
 ## Contexto
 
-La plataforma tiene dos tipos de consumidores con necesidades distintas:
+La plataforma sirve a dos tipos de consumidores:
 
-1. **Modulo Scraping (API de listas):** Consumidores de API que necesitan acceso programatico sin sesion de usuario. Requiere autenticacion via API Key en el header `X-Api-Key`.
+1. **Módulo Scraping (API de listas):** Acceso programático para consultar listas de alto riesgo. Inicialmente se consideró un esquema de API Key para este módulo; sin embargo, la especificación no requiere API keys — todos los endpoints de la plataforma son consumidos por usuarios autenticados o por la SPA.
 
-2. **Modulo Suppliers / SPA:** Usuarios humanos que hacen login con email/password y mantienen sesion activa en el navegador.
+2. **Módulo Suppliers / SPA:** Usuarios humanos que hacen login con email/contraseña y mantienen una sesión activa en el navegador.
 
-Se necesita una estrategia de autenticacion que soporte ambos casos sin complejidad de infraestructura externa (OAuth2 server, Keycloak, etc.).
+Se necesita una estrategia de autenticación que soporte ambos casos sin complejidad de infraestructura externa (servidor OAuth2, Keycloak, etc.).
 
-## Decision
+## Decisión
 
-Implementar **dos esquemas de autenticacion independientes en ASP.NET Core**:
+Usar un **único esquema de autenticación: JWT Bearer** para todos los endpoints de la API, incluyendo el módulo Scraping.
 
-### Esquema 1: JWT Bearer (SPA)
+El enfoque de API Key fue evaluado y se construyó una implementación inicial (`ApiKeyAuthHandler`, tabla `api_keys`, `V004__create_api_keys_table.sql`) pero fue **descartado** porque:
+- La especificación no requiere un mecanismo de autenticación machine-to-machine independiente.
+- Todos los endpoints de scraping son consumidos por la SPA (que ya posee un JWT) o por desarrolladores probando via Swagger (que soporta Bearer auth de forma nativa).
+- Un segundo esquema de autenticación añade complejidad innecesaria y una tabla en base de datos sin beneficio funcional real.
 
-- El usuario hace login via `POST /api/authentication/sign-in`
+### Autenticación JWT Bearer
+
+- El usuario se autentica via `POST /api/authentication/sign-in`
 - El servidor genera un JWT HS256 firmado con la clave secreta configurada
 - El token incluye claims: `sub` (userId), `email`, `name`, roles
-- Expiracion: configurable via `Jwt:ExpirationHours` (default: 24h)
-- Los endpoints del modulo Suppliers usan `[Authorize]` (Bearer scheme)
+- Expiración: configurable via `Jwt:ExpirationHours` (por defecto: 24h)
+- **Todos** los endpoints de los módulos (IAM, Scraping, Suppliers) usan `[Authorize]` (Bearer scheme)
 
 ```csharp
 // JWT Claims incluidos
@@ -36,41 +41,29 @@ new Claim(ClaimTypes.Name, user.Username.Value)
 new Claim(ClaimTypes.Role, role.Name)  // uno por rol
 ```
 
-### Esquema 2: API Key (Scraping)
+### Seguridad de Contraseñas
 
-- API keys se generan y almacenan con hash en la base de datos (tabla `api_keys`)
-- El consumidor envia la key en el header `X-Api-Key`
-- Se implementa como un `AuthenticationHandler` de ASP.NET Core
-- Los endpoints del modulo Scraping usan `[Authorize(AuthenticationSchemes = "ApiKey")]`
-
-```http
-GET /api/lists/ofac?query=John HTTP/1.1
-X-Api-Key: ey-test-key-abc123
-```
-
-### Seguridad de Passwords
-
-- Passwords se hashean con **BCrypt (cost factor 12)** antes de almacenar
-- Nunca se almacena el password en texto plano
-- En produccion, incrementar el cost factor a 13-14
+- Las contraseñas se hashean con **BCrypt (cost factor 12)** antes de almacenarse
+- Nunca se almacena la contraseña en texto plano
+- En producción, incrementar el cost factor a 13–14
 
 ## Consecuencias
 
 **Positivo:**
-- Separacion limpia de los dos tipos de autenticacion sin colision
+- Mecanismo de autenticación único y uniforme — menos código, menor carga cognitiva
 - JWT es stateless — el servidor no necesita almacenar sesiones
-- API Keys son simples de usar para integraciones programaticas
-- BCrypt es el estandar para password hashing — resistente a rainbow tables
+- Swagger UI puede probar todos los endpoints con un único token Bearer
+- BCrypt es el estándar para hash de contraseñas — resistente a rainbow tables
 
 **Negativo:**
-- JWT no puede ser revocado sin implementar una blacklist (para este proyecto es aceptable)
-- API Keys en texto plano en el header pueden ser interceptadas si no se usa HTTPS (usar HTTPS en produccion)
+- JWT no puede ser revocado sin implementar una blacklist (aceptable para este proyecto)
+- Todos los endpoints requieren un JWT válido — no hay acceso anónimo ni via API key
 
-**Mitigacion:**
-- En produccion configurar `UseHttpsRedirection()` y certificado SSL
-- Para revocacion de JWT: implementar blacklist en cache si se requiere en el futuro
+**Mitigación:**
+- En producción configurar `UseHttpsRedirection()` y certificado SSL
+- Para revocación de JWT: implementar blacklist en cache si se requiere en el futuro
 
-## Configuracion
+## Configuración
 
 ```json
 // appsettings.json

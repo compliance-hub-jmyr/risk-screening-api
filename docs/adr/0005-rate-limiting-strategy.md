@@ -14,7 +14,7 @@ A rate limiting strategy is needed that:
 - Is precise (avoids bursts at the start of each minute)
 - Does not require external infrastructure for the development environment
 - Is easy to configure and monitor
-- Is partitioned per API key (each consumer has its own quota)
+- Is partitioned per client IP (since all endpoints are JWT-protected, there is no API key to partition by)
 
 The following options were evaluated:
 
@@ -26,12 +26,14 @@ The following options were evaluated:
 
 ## Decision
 
-Use **`AspNetCoreRateLimit`** (`AspNetCoreRateLimit 5.0.0` NuGet package) configured as client-based rate limiting, partitioned by the `X-Api-Key` header.
+Use **`AspNetCoreRateLimit`** (`AspNetCoreRateLimit 5.0.0` NuGet package) configured as client-based rate limiting, partitioned by client IP address.
 
 `AspNetCoreRateLimit` was chosen over the native `SlidingWindowRateLimiter` because:
 - Policy rules are declarative in `appsettings.json` — no code change needed to adjust limits
 - Supports client-specific overrides (`ClientRateLimitPolicies`) out of the box
 - Mature package with extensive real-world usage in production ASP.NET APIs
+
+> **Note:** The initial design partitioned by `X-Api-Key` header. Since API Key authentication was removed (see [ADR-0003](./0003-jwt-authentication.md)), the partition is now by client IP (`ClientIdHeader: "X-Forwarded-For"`). The limit still applies to `/api/lists/*` only.
 
 ### Configuration in `appsettings.json`
 
@@ -40,7 +42,7 @@ Use **`AspNetCoreRateLimit`** (`AspNetCoreRateLimit 5.0.0` NuGet package) config
   "ClientRateLimiting": {
     "EnableEndpointRateLimiting": true,
     "StackBlockedRequests": false,
-    "ClientIdHeader": "X-Api-Key",
+    "ClientIdHeader": "X-Forwarded-For",
     "HttpStatusCode": 429,
     "GeneralRules": [
       {
@@ -78,7 +80,7 @@ Retry-After: 30
 Content-Type: application/json
 
 {
-  "message": "API calls quota exceeded. Maximum 20 requests per 1m per API key."
+  "message": "API calls quota exceeded. Maximum 20 requests per 1m."
 }
 ```
 
@@ -86,7 +88,6 @@ Content-Type: application/json
 
 **Positive:**
 - Rules are fully declarative in `appsettings.json` — tunable without recompiling
-- `ClientIdHeader: "X-Api-Key"` partitions each consumer's quota automatically
 - `EnableEndpointRateLimiting: true` scopes the limit to `/api/lists/*` only — other endpoints are unaffected
 - Standard `Retry-After` header (RFC 6585) in the 429 response
 - In-memory counters — no Redis required for Phase 1
@@ -94,6 +95,7 @@ Content-Type: application/json
 **Negative:**
 - In-memory state — if multiple API instances run behind a load balancer, each instance has its own counter (limit is not shared across instances)
 - Counters are lost on API restart
+- IP-based partitioning can be spoofed via proxies (acceptable for Phase 1)
 
 **Mitigation for production with multiple instances:**
 - Replace `MemoryCacheRateLimitCounterStore` with a Redis-backed implementation
@@ -103,7 +105,7 @@ Content-Type: application/json
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| `AspNetCoreRateLimit` | 5.0.0 | Client-based rate limiting middleware with per-key quotas |
+| `AspNetCoreRateLimit` | 5.0.0 | Client-based rate limiting middleware with per-IP quotas |
 
 ## References
 - [AspNetCoreRateLimit on GitHub](https://github.com/stefanprodan/AspNetCoreRateLimit)
