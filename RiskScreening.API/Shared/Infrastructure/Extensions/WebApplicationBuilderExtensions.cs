@@ -5,6 +5,7 @@ using RiskScreening.API.Shared.Infrastructure.Configuration;
 using RiskScreening.API.Shared.Infrastructure.Persistence.Repositories;
 using RiskScreening.API.Shared.Infrastructure.Pipeline;
 using RiskScreening.API.Shared.Infrastructure.Web.ExceptionHandlers;
+using Serilog;
 
 namespace RiskScreening.API.Shared.Infrastructure.Extensions;
 
@@ -15,11 +16,24 @@ namespace RiskScreening.API.Shared.Infrastructure.Extensions;
 public static class WebApplicationBuilderExtensions
 {
     /// <summary>
+    ///     Configures Serilog as the application logger.
+    ///     Reads minimum levels from <c>Serilog</c> section in configuration.
+    ///     Enriches every log entry with <c>LogContext</c> properties (e.g. <c>CorrelationId</c>)
+    ///     and a static <c>Application</c> label for Loki filtering.
+    /// </summary>
+    public static void AddLogging(this WebApplicationBuilder builder)
+    {
+        builder.Host.UseSerilog((ctx, config) =>
+            config.ReadFrom.Configuration(ctx.Configuration)
+                  .Enrich.FromLogContext()
+                  .Enrich.WithProperty("Application", "RiskScreening.API")
+                  .WriteTo.Console());
+    }
+
+    /// <summary>
     ///     Registers all shared infrastructure services required by the application.
     ///     Includes the Unit of Work and any other cross-cutting infrastructure dependencies.
     /// </summary>
-    /// <param name="builder">The web application builder to configure.</param>
-    /// <returns>The same <see cref="WebApplicationBuilder"/> instance to allow method chaining.</returns>
     public static void AddSharedInfrastructure(this WebApplicationBuilder builder)
     {
         builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();

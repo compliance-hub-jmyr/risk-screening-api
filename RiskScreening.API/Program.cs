@@ -5,12 +5,16 @@ using RiskScreening.API.Shared.Infrastructure.Extensions;
 using RiskScreening.API.Shared.Infrastructure.Interfaces;
 using RiskScreening.API.Shared.Infrastructure.Persistence;
 using RiskScreening.API.Shared.Infrastructure.Persistence.Migrations;
+using RiskScreening.API.Shared.Infrastructure.Web.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // ==========================================
 // SERVICES
 // ==========================================
+
+// Serilog — replaces default ILogger with structured logging + LogContext enrichment
+builder.AddLogging();
 
 // OpenAPI documentation (native + Swashbuckle) with JWT auth and custom response filters
 builder.AddOpenApiDocumentation();
@@ -77,6 +81,9 @@ app.UseCorsPolicy();
 
 /*// IP rate limiting — must run before auth (20 req/min on /api/v1/lists/*)
 app.UseScrapingModule();*/
+
+// Assigns X-Correlation-ID to every request and pushes it into Serilog LogContext
+app.UseMiddleware<CorrelationIdMiddleware>();
 
 // JWT Bearer authentication + role-based authorization
 app.UseAuthentication();
