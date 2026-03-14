@@ -19,4 +19,15 @@ public static class AuthenticatedUserResponseMapper
             result.User.Roles.Select(r => r.Name).ToList(),
             result.Token);
     }
+
+    /// <summary>Maps a <see cref="User"/> aggregate + an existing token (current-user flow).</summary>
+    public static AuthenticatedUserResponse ToResponse(User user, string token)
+    {
+        return new AuthenticatedUserResponse(user.Id,
+            user.Email.Value,
+            user.Username.Value,
+            user.Status.ToString(),
+            user.Roles.Select(r => r.Name).ToList(),
+            token);
+    }
 }
