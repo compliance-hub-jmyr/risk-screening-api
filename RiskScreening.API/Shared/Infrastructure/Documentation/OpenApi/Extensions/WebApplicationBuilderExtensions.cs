@@ -19,7 +19,7 @@ public static class WebApplicationBuilderExtensions
     ///         <item><see cref="ErrorResponse"/> schema registration</item>
     ///     </list>
     /// </summary>
-    public static WebApplicationBuilder AddOpenApiDocumentation(this WebApplicationBuilder builder)
+    public static void AddOpenApiDocumentation(this WebApplicationBuilder builder)
     {
         // Native ASP.NET Core OpenAPI — /openapi/v1.json
         builder.Services.AddOpenApi();
@@ -76,8 +76,6 @@ public static class WebApplicationBuilderExtensions
             // Registers ErrorResponse in /components/schemas so $ref links resolve in Swagger UI
             options.DocumentFilter<ErrorResponseDocumentFilter>();
         });
-
-        return builder;
     }
 
     /// <summary>
@@ -88,7 +86,7 @@ public static class WebApplicationBuilderExtensions
     ///     This policy is intended for development and internal APIs only.
     ///     Restrict origins in production environments.
     /// </remarks>
-    public static WebApplicationBuilder AddCorsPolicy(this WebApplicationBuilder builder)
+    public static void AddCorsPolicy(this WebApplicationBuilder builder)
     {
         builder.Services.AddCors(options =>
         {
@@ -98,7 +96,5 @@ public static class WebApplicationBuilderExtensions
                     .AllowAnyMethod()
                     .AllowAnyHeader());
         });
-
-        return builder;
     }
 }
