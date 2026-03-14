@@ -9,3 +9,10 @@ Content-Type: application/json
 }
 
 ###
+
+### Get Current User
+GET http://localhost:5215/api/authentication/me
+Api-Version: 1
+Authorization: Bearer {{token}}
+
+###

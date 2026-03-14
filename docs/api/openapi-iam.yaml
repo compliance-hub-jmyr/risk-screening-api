@@ -71,6 +71,28 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  /api/authentication/me:
+    get:
+      summary: Obtener perfil del usuario actual
+      description: Devuelve el perfil del usuario identificado por el JWT Bearer token.
+      tags: [Authentication]
+      responses:
+        '200':
+          description: Perfil obtenido exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticatedUserResponse'
+              example:
+                id: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+                email: admin@riskscreening.com
+                username: admin
+                status: Active
+                roles: [ADMIN]
+                token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
 components:
   securitySchemes:
     BearerAuth:
