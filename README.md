@@ -16,7 +16,6 @@
 - [Repository Structure](#repository-structure)
 - [Technology Stack](#technology-stack)
 - [Architecture Decision Records (ADRs)](#architecture-decision-records-adrs)
-- [User Stories](#user-stories)
 - [Sources and References](#sources-and-references)
 
 ---
@@ -34,8 +33,8 @@ RESTful API that fetches and aggregates compliance data from international high-
 | [ICIJ](https://offshoreleaks.icij.org) | Offshore Leaks DB | Entity, Jurisdiction, Linked To, Data From |
 
 **Features:**
-- Authentication via `X-Api-Key` header
-- Rate limiting: **20 requests/minute** per key (`AspNetCoreRateLimit`)
+- Authentication via JWT Bearer token (`Authorization: Bearer <token>`)
+- Rate limiting: **20 requests/minute** per client IP (`AspNetCoreRateLimit`)
 - Paginated JSON responses with hit count
 - On-demand fetching with `IMemoryCache` result caching (TTL per source)
 
@@ -77,14 +76,14 @@ risk-screening-api/
 |   |   |-- 0005-rate-limiting-strategy.md
 |   |   |-- 0006-web-scraping-approach.md
 |   |   |-- 0007-angular-frontend.md
-|   |   `-- 0008-cache-strategy.md
-|   |-- architecture/
-|   |   |-- c4-diagrams.md                    # C4 Diagrams (L1 to L4)
-|   |   `-- database-schema.md                # ERD and table definitions
-|   `-- user-stories/
-|       |-- iam-module.md
-|       |-- scraping-module.md
-|       `-- suppliers-module.md
+|   |   |-- 0008-cache-strategy.md
+|   |   |-- 0009-pagination-strategy.md
+|   |   |-- 0010-error-handling.md
+|   |   |-- 0011-auditing.md
+|   |   `-- 0012-api-versioning.md
+|   `-- architecture/
+|       |-- c4-diagrams.md                    # C4 Diagrams (L1 to L4)
+|       `-- database-schema.md                # ERD and table definitions
 |
 |-- RiskScreening.API/                        # .NET 10 Backend
 |   |-- Migrations/
@@ -113,12 +112,13 @@ risk-screening-api/
 | Layer | Technology | Version | Purpose |
 |-------|-----------|---------|---------|
 | Framework | ASP.NET Core | .NET 10 | Web API host |
+| Versioning | Asp.Versioning.Http | 8.x | Header-based API versioning (`Api-Version` header) |
 | CQRS | MediatR | 14.1.0 | Command/query mediator |
 | Validation | FluentValidation | 12.1.1 | Validation in MediatR pipeline |
 | ORM | Entity Framework Core | 10.0.3 | Data access |
 | Auth | JWT Bearer / BCrypt.Net-Next | 10.0.3 / 4.0.3 | Authentication and password hashing |
 | Docs | Swashbuckle (`Swashbuckle.AspNetCore`) | 10.1.4 | Swagger UI — OpenAPI 3.1 |
-| Rate Limiting | AspNetCoreRateLimit | 5.0.0 | Per-API-key request quotas |
+| Rate Limiting | AspNetCoreRateLimit | 5.0.0 | Per-IP request quotas on scraping endpoints |
 | Testing | xUnit + FluentAssertions | — | Unit tests |
 | Migrations | DbUp (`dbup-sqlserver`) | 7.2.0 | Versioned SQL schema runner |
 
@@ -148,22 +148,16 @@ risk-screening-api/
 |-----|----------|--------|
 | [ADR-0001](./docs/adr/0001-modular-monolith.md) | Modular Monolith architecture | Accepted |
 | [ADR-0002](./docs/adr/0002-cqrs-mediatr.md) | CQRS with MediatR and pipeline behaviors | Accepted |
-| [ADR-0003](./docs/adr/0003-jwt-authentication.md) | Dual authentication: JWT Bearer + API Key | Accepted |
+| [ADR-0003](./docs/adr/0003-jwt-authentication.md) | JWT Bearer authentication (API Key removed) | Accepted |
 | [ADR-0004](./docs/adr/0004-sql-migration-scripts.md) | Versioned SQL scripts with DbUp (Flyway-style naming) | Accepted |
-| [ADR-0005](./docs/adr/0005-rate-limiting-strategy.md) | Rate limiting with AspNetCoreRateLimit (per API key) | Accepted |
+| [ADR-0005](./docs/adr/0005-rate-limiting-strategy.md) | Rate limiting with AspNetCoreRateLimit (per client IP) | Accepted |
 | [ADR-0006](./docs/adr/0006-web-scraping-approach.md) | Web scraping: on-demand with IMemoryCache (Phase 1) | Accepted |
 | [ADR-0007](./docs/adr/0007-angular-frontend.md) | Frontend framework: Angular 21.2 + PrimeNG 21 | Accepted |
 | [ADR-0008](./docs/adr/0008-cache-strategy.md) | Cache technology: IMemoryCache (Phase 1) | Accepted |
-
----
-
-## User Stories
-
-| Module | Document |
-|--------|----------|
-| IAM — Authentication and User Management | [iam-module.md](./docs/user-stories/iam-module.md) |
-| Scraping Module — High-Risk List Search | [scraping-module.md](./docs/user-stories/scraping-module.md) |
-| Suppliers Module — Supplier Management and Screening | [suppliers-module.md](./docs/user-stories/suppliers-module.md) |
+| [ADR-0009](./docs/adr/0009-pagination-strategy.md) | Pagination strategy: offset-based with PageResponse wrapper | Accepted |
+| [ADR-0010](./docs/adr/0010-error-handling.md) | Centralized error handling with GlobalExceptionHandler | Accepted |
+| [ADR-0011](./docs/adr/0011-auditing.md) | Audit timestamps via EF Core SaveChanges interception | Accepted |
+| [ADR-0012](./docs/adr/0012-api-versioning.md) | API versioning strategy: header-based with `Api-Version` | Accepted |
 
 ---
 
