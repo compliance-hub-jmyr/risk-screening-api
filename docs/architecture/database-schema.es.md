@@ -71,7 +71,6 @@ erDiagram
         nvarchar_10  risk_level "NOT NULL DEFAULT 'NONE' — NONE | LOW | MEDIUM | HIGH"
         int          total_matches "NOT NULL DEFAULT 0"
         nvarchar_max entries_json "NULLABLE — lista serializada de RiskEntry"
-        nvarchar_max notes "NULLABLE"
         datetime2    created_at "DEFAULT GETUTCDATE()"
         nvarchar_255 created_by "NULLABLE"
     }
@@ -180,7 +179,6 @@ Almacena el resultado de cada ejecución de screening para un proveedor.
 | `risk_level` | `NVARCHAR(10)` | No | CHECK, DEFAULT `'NONE'` | `NONE` \| `LOW` \| `MEDIUM` \| `HIGH` |
 | `total_matches` | `INT` | No | DEFAULT `0` | Total de coincidencias en todas las fuentes |
 | `entries_json` | `NVARCHAR(MAX)` | Sí | — | Array JSON serializado de objetos `RiskEntry` coincidentes |
-| `notes` | `NVARCHAR(MAX)` | Sí | — | Notas opcionales del analista |
 | `created_at` | `DATETIME2` | No | DEFAULT `GETUTCDATE()` | |
 | `created_by` | `NVARCHAR(255)` | Sí | — | Username del claim JWT |
 

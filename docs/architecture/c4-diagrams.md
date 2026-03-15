@@ -648,8 +648,7 @@ classDiagram
         +RiskLevel RiskLevel
         +int TotalMatches
         +string? EntriesJson
-        +string? Notes
-        +Create(supplierId, sourcesQueried, riskLevel, totalMatches, entries, notes) ScreeningResult
+        +Create(supplierId, sourcesQueried, riskLevel, totalMatches, entries) ScreeningResult
     }
 
     class RiskLevel {

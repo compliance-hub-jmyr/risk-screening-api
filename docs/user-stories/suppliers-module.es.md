@@ -27,7 +27,7 @@ Scripts de migracion SQL V005–V006, configuraciones EF Core para `Supplier` y 
 #### Tareas
 
 - `[BE-DB]` Script `V005__create_suppliers_table.sql` — columnas: `id`, `name`, `tax_id` (unico), `country`, `contact_email`, `contact_phone`, `address`, `notes`, `risk_level` (CHECK: NONE/LOW/MEDIUM/HIGH), `status` (CHECK: PENDING/APPROVED/REJECTED/UNDER_REVIEW), `created_at`, `updated_at`, `created_by`, `updated_by`; indices: `IX_suppliers_risk_level`, `IX_suppliers_status`, `IX_suppliers_country`
-- `[BE-DB]` Script `V006__create_screening_results_table.sql` — columnas: `id`, `supplier_id` (FK → `suppliers(id)` ON DELETE CASCADE), `screened_at`, `risk_level` (CHECK), `total_matches`, `notes`, `created_at`; indices: `IX_screening_results_supplier_id`, `IX_screening_results_screened_at DESC`, `IX_screening_results_risk_level`
+- `[BE-DB]` Script `V006__create_screening_results_table.sql` — columnas: `id`, `supplier_id` (FK → `suppliers(id)` ON DELETE CASCADE), `screened_at`, `risk_level` (CHECK), `total_matches`, `created_at`; indices: `IX_screening_results_supplier_id`, `IX_screening_results_screened_at DESC`, `IX_screening_results_risk_level`
 - `[BE-INFRA]` EF Core `SupplierConfiguration` y `ScreeningResultConfiguration`
 - `[BE-INFRA]` `SupplierRepository` y `ScreeningResultRepository` implementando `BaseRepository`
 - `[BE-INFRA]` `SuppliersModuleExtensions.AddSuppliersModule()` — registra ambos repositorios como scoped
@@ -292,7 +292,7 @@ Endpoint `POST /api/suppliers/{supplierId}/screenings` que consulta OFAC, World 
 #### Tareas
 
 - `[BE-DOMAIN]` Metodo `Supplier.ApplyScreeningResult(RiskLevel)` — actualiza `RiskLevel`, establece `Status = UNDER_REVIEW` si `riskLevel >= HIGH`
-- `[BE-DOMAIN]` Agregado `ScreeningResult` con fabrica `ScreeningResult.Create(supplierId, riskLevel, totalMatches, notes?)` — inmutable tras la creacion
+- `[BE-DOMAIN]` Agregado `ScreeningResult` con fabrica `ScreeningResult.Create(supplierId, riskLevel, totalMatches)` — inmutable tras la creacion
 - `[BE-DOMAIN]` `ScreeningResultNotFoundException` (extiende `EntityNotFoundException`)
 - `[BE-APP]` `RunScreeningCommand` + `RunScreeningCommandHandler` — carga proveedor, llama `ScrapingOrchestrationService.SearchAllAsync(supplier.Name)`, calcula `RiskLevel` desde el score maximo (≥ 0.85 → HIGH, ≥ 0.60 → MEDIUM, cualquier hit → LOW, 0 → NONE), crea `ScreeningResult`, llama `ApplyScreeningResult`, persiste ambos, hace commit, retorna el nuevo Id
 - `[BE-INFRA]` `IScreeningResultRepository` + `ScreeningResultRepository`
@@ -366,7 +366,7 @@ Endpoint `GET /api/screenings?supplierId={supplierId}` que retorna una lista pag
 - Given que estoy autenticado y se ha ejecutado al menos un screening para el proveedor
 - When llamo `GET /api/screenings?supplierId={supplierId}&page=0&size=10`
 - Then recibo HTTP 200 con una lista paginada ordenada por `screenedAt` descendente
-- And cada entrada incluye `{ id, supplierId, screenedAt, riskLevel, totalMatches, notes, createdAt }`
+- And cada entrada incluye `{ id, supplierId, screenedAt, riskLevel, totalMatches, createdAt }`
 
 **Escenario 2: Sin screenings aun**
 - Given que el proveedor existe pero no tiene historial de screenings
@@ -401,7 +401,7 @@ Endpoint `GET /api/screenings/{screeningId}` que retorna el resultado de screeni
 **Escenario 1: Resultado encontrado**
 - Given que estoy autenticado y el screeningId existe
 - When llamo `GET /api/screenings/{screeningId}`
-- Then recibo HTTP 200 con el resultado completo `{ id, supplierId, screenedAt, riskLevel, totalMatches, notes, createdAt }`
+- Then recibo HTTP 200 con el resultado completo `{ id, supplierId, screenedAt, riskLevel, totalMatches, createdAt }`
 
 **Escenario 2: Resultado no encontrado**
 - Given que el screeningId no existe
