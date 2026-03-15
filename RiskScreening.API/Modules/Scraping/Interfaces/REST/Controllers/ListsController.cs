@@ -1,7 +1,8 @@
 using Asp.Versioning;
+using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using RiskScreening.API.Modules.Scraping.Infrastructure.Services;
+using RiskScreening.API.Modules.Scraping.Domain.Model.Queries;
 using RiskScreening.API.Modules.Scraping.Interfaces.REST.Documentation;
 using RiskScreening.API.Modules.Scraping.Interfaces.REST.Mappers.Response;
 using RiskScreening.API.Shared.Infrastructure.Configuration;
@@ -13,38 +14,19 @@ namespace RiskScreening.API.Modules.Scraping.Interfaces.REST.Controllers;
 [ApiVersion(ApiVersioning.V1)]
 [Produces("application/json")]
 [Authorize]
-public class ListsController(ScrapingOrchestrationService orchestrationService)
-    : ControllerBase, IListsController
+public class ListsController(IMediator mediator) : ControllerBase, IListsController
 {
-    private static readonly HashSet<string> ValidSources = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "ofac", "worldbank", "icij"
-    };
-
+    /// <inheritdoc />
     [HttpGet("search")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Search(
         [FromQuery] string q,
-        [FromQuery] string? sources,
+        [FromQuery] List<string>? sources,
         CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(q))
-            return BadRequest(new { message = "Query parameter 'q' is required." });
-
-        List<string>? sourceList = null;
-
-        if (!string.IsNullOrWhiteSpace(sources))
-        {
-            sourceList = sources.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Where(s => ValidSources.Contains(s))
-                .ToList();
-
-            if (sourceList.Count == 0)
-                return BadRequest(new { message = "No valid sources specified. Valid values: ofac, worldbank, icij." });
-        }
-
-        var result = await orchestrationService.SearchAllAsync(q.Trim(), sourceList, ct);
+        var query = new SearchRiskListsQuery(q, sources);
+        var result = await mediator.Send(query, ct);
         return Ok(ScrapingResponseMapper.ToResponse(result));
     }
 }

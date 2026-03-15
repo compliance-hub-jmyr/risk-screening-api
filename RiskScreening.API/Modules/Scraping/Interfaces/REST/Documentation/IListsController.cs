@@ -5,23 +5,22 @@ using Swashbuckle.AspNetCore.Annotations;
 namespace RiskScreening.API.Modules.Scraping.Interfaces.REST.Documentation;
 
 /// <summary>
-///     Swagger documentation for the Lists (scraping) controller.
+/// OpenAPI contract for risk list search endpoints.
+/// <para>
+/// Separates the documentation concern from the implementation.
+/// Implementation lives in <see cref="Controllers.ListsController"/>.
+/// </para>
 /// </summary>
 public interface IListsController
 {
-    /// <summary>
-    ///     Searches selected risk list sources in parallel and returns merged results.
-    ///     <para>
-    ///         The <c>sources</c> parameter accepts a comma-separated list of source names
-    ///         (ofac, worldbank, icij). Minimum 1, maximum 3.
-    ///         When omitted, all registered sources are queried.
-    ///         Each source result is cached independently for 10 minutes.
-    ///     </para>
-    /// </summary>
+    /// <summary> Search risk lists by term and optional sources.</summary>
     [SwaggerOperation(Summary = "Search risk lists by selected sources", Tags = ["Lists"])]
     [SwaggerResponse(StatusCodes.Status200OK, "Search results.", typeof(ScrapingResponse))]
     [SwaggerResponse(StatusCodes.Status400BadRequest, "Missing search term or invalid sources.")]
     [SwaggerResponse(StatusCodes.Status401Unauthorized, "Authentication required.")]
     [SwaggerResponse(StatusCodes.Status429TooManyRequests, "Rate limit exceeded.")]
-    Task<IActionResult> Search([FromQuery] string q, [FromQuery] string? sources, CancellationToken ct);
+    Task<IActionResult> Search(
+        [FromQuery] string q,
+        [FromQuery] List<string>? sources,
+        CancellationToken ct);
 }
