@@ -1,8 +1,8 @@
 using MediatR;
 using Microsoft.Extensions.Caching.Memory;
 using RiskScreening.API.Modules.Scraping.Application.Ports;
-using RiskScreening.API.Modules.Scraping.Domain.Model.ValueObjects;
 using RiskScreening.API.Modules.Scraping.Domain.Model.Queries;
+using RiskScreening.API.Modules.Scraping.Domain.Model.ValueObjects;
 
 namespace RiskScreening.API.Modules.Scraping.Application.Search;
 
