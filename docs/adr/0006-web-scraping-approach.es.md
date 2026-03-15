@@ -4,12 +4,12 @@
 `Aceptado`
 
 ## Fecha
-2026-03-13
+2026-03-15 (Actualizado)
 
 ## Contexto
 
 El módulo Scraping requiere obtener datos de tres fuentes externas:
-1. **OFAC SDN** — US Treasury, disponible como feed XML público
+1. **OFAC SDN** — US Treasury Sanctions List Search (formulario web en `https://sanctionssearch.ofac.treas.gov/`)
 2. **World Bank Debarred Firms** — Página web con tabla HTML paginada
 3. **ICIJ Offshore Leaks** — API REST pública (búsqueda por consulta; sin descarga completa del dataset)
 
@@ -36,11 +36,18 @@ Este enfoque es más simple de implementar y operar en la Fase 1, evita la compl
 ### Estrategia por fuente
 
 #### OFAC SDN
-- Referencia del assessment: `https://sanctionssearch.ofac.treas.gov/` (formulario web, sin API REST)
-- Fuente programática: `https://sdn.ofac.treas.gov/SDN_XML.zip` (ZIP público con XML SDN)
-- Método: Descarga ZIP, descompresión en memoria, parsing XML con `System.Xml.Linq`
-- Clave de cache: `scraping:ofac:{consultaNormalizada}`
-- TTL: **10 minutos**
+- **Referencia del assessment**: `https://sanctionssearch.ofac.treas.gov/` (formulario web ASP.NET con funcionalidad de búsqueda)
+- **Método**: Web scraping real mediante `HtmlAgilityPack`
+  1. `OfacScrapingSource` (adaptador) orquesta el flujo HTTP: GET página inicial → POST formulario de búsqueda
+  2. `OfacHtmlParser` (helper estático) maneja la extracción HTML:
+     - `ExtractFormData()` — parsea ViewState de ASP.NET y campos ocultos de la página inicial
+     - `ParseResults()` — localiza la tabla `#scrollResults` y convierte filas en records `RiskEntry`
+  3. Columnas extraídas: Name, Address, Type, Program(s), List, **Score** (porcentaje de confianza de coincidencia)
+- **Arquitectura**: Ports & Adapters — puerto `IScrapingSource` en `Application/Ports/`, adaptador `OfacScrapingSource` en `Infrastructure/Sources/`, orquestación via `SearchRiskListsQueryHandler` (handler CQRS de MediatR en `Application/Search/`)
+- **¿Por qué no XML?** El feed XML (`https://www.treasury.gov/ofac/downloads/sdn.xml`) no incluye el campo **Score**, que es un requerimiento crítico del assessment técnico. El Score representa el porcentaje de confianza de coincidencia calculado por el algoritmo de búsqueda de OFAC.
+- **Clave de cache**: `scraping:ofac:{consultaNormalizada}`
+- **TTL**: **10 minutos**
+- **Timeout del cliente HTTP**: 45 segundos (aumentado para manejar envío de formulario + parsing)
 
 #### World Bank Debarred Firms
 - Fuente: `https://projects.worldbank.org/en/projects-operations/procurement/debarred-firms?srchTerm={consulta}`
@@ -75,8 +82,9 @@ Si un fetch en vivo falla (timeout, error HTTP, error de parsing):
 - Sin riesgo de datos obsoletos por un worker que falló al refrescar
 
 **Negativas:**
-- La primera solicitud para un término nuevo incurre en latencia de fetch en vivo (la descarga XML de OFAC puede tardar 1–3 s)
+- La primera solicitud para un término nuevo incurre en latencia de fetch en vivo (envío de formulario OFAC + parsing HTML puede tardar 2–5 s)
 - Si la fuente externa no está disponible al momento de la consulta, la solicitud falla (sin fallback pre-cacheado)
+- El scraping de OFAC es más frágil que el parsing XML — cambios en la estructura del formulario ASP.NET o formato de la tabla HTML romperán el scraper
 
 **Mitigación:**
 - Usar políticas de retry y timeout de `Polly` en todos los clientes HTTP para reducir el impacto de fallos transitorios
@@ -86,10 +94,9 @@ Si un fetch en vivo falla (timeout, error HTTP, error de parsing):
 
 | Paquete | Versión | Propósito |
 |---------|---------|-----------|
-| `HtmlAgilityPack` | 1.11.x | Parsing HTML para World Bank |
-| `System.Xml.Linq` | .NET 10 | Parsing XML para OFAC SDN |
+| `HtmlAgilityPack` | 1.11.71 | Parsing HTML para OFAC y World Bank |
 | `Microsoft.Extensions.Http` | .NET 10 | `HttpClientFactory` para clientes tipados |
-| `Polly` | 8.x | Políticas de retry y timeout para solicitudes HTTP |
+| `Polly` | 8.x (futuro) | Políticas de retry y timeout para solicitudes HTTP |
 
 ## Referencias
 - [Descargas de la Lista SDN de OFAC](https://www.treasury.gov/resource-center/sanctions/SDN-List/Pages/default.aspx)
