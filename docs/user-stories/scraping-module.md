@@ -270,7 +270,7 @@ As a developer, I need to configure the scraping module's infrastructure — typ
 - `[BE-INFRA]` Tres registros de `HttpClient` tipados — cada uno con `Timeout` y `User-Agent` header configurados para su fuente destino
 - `[BE-INFRA]` `IMemoryCache` registration (si no está ya registrado por Shared)
 - `[BE-INFRA]` `ScrapingOrchestrationService` registrado como scoped; recibe `IEnumerable<IScrapingSource>` (las tres fuentes inyectadas via DI)
-- `[BE-INFRA]` `AspNetCoreRateLimit` IP-based rate limiting — 20 requests/minute por client IP para `GET:/api/lists/*`
+- `[BE-INFRA]` `AspNetCoreRateLimit` IP-based rate limiting with tiered rules: `POST /api/authentication/sign-in` (5 req/min — brute-force protection), `GET /api/lists/*` (20 req/min — external source protection), `*:/api/*` (100 req/min — general fallback)
 - `[BE-INFRA]` `UseScrapingModule(app)` agrega `app.UseIpRateLimiting()` middleware
 - `[BE-TEST]` Integration test: rate limiter rechaza la 21a solicitud por minuto con 429
 
@@ -280,7 +280,7 @@ As a developer, I need to configure the scraping module's infrastructure — typ
 - When `AddScrapingModule()` y `UseScrapingModule()` son llamados
 - Then las tres implementaciones de `IScrapingSource` son resolvibles desde DI
 - And `ScrapingOrchestrationService` es resolvible y recibe las tres fuentes
-- And el rate limiter está activo en `GET /api/lists/*` (20 req/min por IP)
+- And el rate limiter está activo con reglas escalonadas: sign-in (5/min), lists (20/min), general API (100/min)
 - And solicitudes que exceden el límite reciben HTTP 429 con header `Retry-After`
 
 ---
@@ -312,7 +312,7 @@ Integrar fuentes adicionales (EU Sanctions, UN Security Council, INTERPOL). La i
 | ICIJ fields | `listSource`, `name` (node caption), `jurisdiction`, `linkedTo`, `dataFrom` |
 | Cache key format | `scraping:{SOURCE}:{term}` — per source, per term; TTL 10 minutes |
 | Fault tolerance | Each `IScrapingSource` wraps its implementation in try/catch and returns `SearchResult.Empty` on any error — the orchestrator never propagates source-level exceptions |
-| Rate limiting | IP-based via `AspNetCoreRateLimit`; applies only to `GET /api/lists/*`; 20 req/min; returns 429 with `Retry-After` when exceeded |
+| Rate limiting | IP-based via `AspNetCoreRateLimit` with tiered rules: `POST /api/authentication/sign-in` (5 req/min — brute-force protection), `GET /api/lists/*` (20 req/min — external source protection), `*:/api/*` (100 req/min — general fallback); returns 429 with `Retry-After` when exceeded |
 | Parallel execution | `SearchAllAsync` uses `Task.WhenAll` — all three sources queried concurrently; total latency = slowest source, not the sum |
 | OFAC parsing | Downloads and decompresses the full SDN ZIP in memory on each cache miss; no disk writes |
 | World Bank parsing | `HtmlAgilityPack` for robust HTML table parsing |

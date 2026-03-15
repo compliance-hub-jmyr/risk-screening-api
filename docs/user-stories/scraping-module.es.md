@@ -265,7 +265,7 @@ Como desarrollador, necesito configurar la infraestructura del modulo de scrapin
 - `[BE-INFRA]` Tres registros de `HttpClient` tipados — cada uno con `Timeout` y header `User-Agent` configurados para su fuente objetivo
 - `[BE-INFRA]` Registro de `IMemoryCache` (si no esta ya registrado por Shared)
 - `[BE-INFRA]` `ScrapingOrchestrationService` registrado como scoped; recibe `IEnumerable<IScrapingSource>` (las tres fuentes inyectadas via DI)
-- `[BE-INFRA]` Rate limiting por IP via `AspNetCoreRateLimit` — 20 peticiones/minuto por IP de cliente para `GET:/api/lists/*`
+- `[BE-INFRA]` Rate limiting por IP via `AspNetCoreRateLimit` con reglas escalonadas: `POST /api/authentication/sign-in` (5 req/min — proteccion contra fuerza bruta), `GET /api/lists/*` (20 req/min — proteccion de fuentes externas), `*:/api/*` (100 req/min — fallback general)
 - `[BE-INFRA]` `UseScrapingModule(app)` conecta el middleware `app.UseIpRateLimiting()`
 - `[BE-TEST]` Integration test: el rate limiter rechaza la peticion numero 21 por minuto con 429
 
@@ -275,7 +275,7 @@ Como desarrollador, necesito configurar la infraestructura del modulo de scrapin
 - When se llaman `AddScrapingModule()` y `UseScrapingModule()`
 - Then las tres implementaciones de `IScrapingSource` son resolvibles desde DI
 - And `ScrapingOrchestrationService` es resolvible y recibe las tres fuentes
-- And el rate limiter esta activo en los endpoints `GET /api/lists/*` (20 req/min por IP)
+- And el rate limiter esta activo con reglas escalonadas: sign-in (5/min), lists (20/min), API general (100/min)
 - And las peticiones que exceden el limite reciben HTTP 429 con header `Retry-After`
 
 ---
@@ -307,7 +307,7 @@ Integracion de fuentes adicionales (Sanciones UE, Consejo de Seguridad ONU, INTE
 | Campos ICIJ | `listSource`, `name` (caption del nodo), `jurisdiction`, `linkedTo`, `dataFrom` |
 | Formato de clave de cache | `scraping:{FUENTE}:{termino}` — por fuente, por termino; TTL de 10 minutos |
 | Tolerancia a fallos | Cada `IScrapingSource` envuelve toda su implementacion en try/catch y retorna `SearchResult.Empty` ante cualquier error — el orquestador nunca propaga excepciones a nivel de fuente |
-| Rate limiting | Basado en IP via `AspNetCoreRateLimit`; aplica solo a `GET /api/lists/*`; 20 req/min; retorna 429 con `Retry-After` al superarlo |
+| Rate limiting | Basado en IP via `AspNetCoreRateLimit` con reglas escalonadas: `POST /api/authentication/sign-in` (5 req/min — proteccion contra fuerza bruta), `GET /api/lists/*` (20 req/min — proteccion de fuentes externas), `*:/api/*` (100 req/min — fallback general); retorna 429 con `Retry-After` al superarlo |
 | Ejecucion paralela | `SearchAllAsync` usa `Task.WhenAll` — las tres fuentes se consultan concurrentemente; la latencia total es la de la fuente mas lenta, no la suma |
 | Parseo OFAC | Descarga y descomprime el ZIP SDN completo en memoria en cada cache miss; sin escrituras en disco local |
 | Parseo Banco Mundial | `HtmlAgilityPack` se usa para parseo robusto de tabla HTML |
