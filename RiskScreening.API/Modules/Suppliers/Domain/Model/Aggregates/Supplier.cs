@@ -58,7 +58,33 @@ public class Supplier : AggregateRoot
             IsDeleted = false
         };
     }
-    
+
+    public void Update(
+        string legalName,
+        string commercialName,
+        string taxId,
+        string country,
+        string? contactPhone = null,
+        string? contactEmail = null,
+        string? website = null,
+        string? address = null,
+        decimal? annualBillingUsd = null,
+        string? notes = null)
+    {
+        EnsureNotDeleted();
+        
+        LegalName = new LegalName(legalName);
+        CommercialName = new CommercialName(commercialName);
+        TaxId = new TaxId(taxId);
+        Country = new CountryCode(country);
+        ContactPhone = contactPhone is not null ? new PhoneNumber(contactPhone) : null;
+        ContactEmail = contactEmail is not null ? new Email(contactEmail) : null;
+        Website = website is not null ? new WebsiteUrl(website) : null;
+        Address = address is not null ? new SupplierAddress(address) : null;
+        AnnualBillingUsd = annualBillingUsd.HasValue ? new AnnualBilling(annualBillingUsd.Value) : null;
+        Notes = notes;
+    }
+
     public void Delete()
     {
         if (IsDeleted) throw new SupplierAlreadyDeletedException(Id);

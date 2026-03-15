@@ -65,3 +65,24 @@ Api-Version: 1
 Authorization: Bearer {{token}}
 
 ###
+
+### Update Supplier
+PUT http://localhost:5215/api/suppliers/{{supplierId}}
+Api-Version: 1
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "legalName": "Acme Soluciones S.A.C.",
+  "commercialName": "Acme Peru",
+  "taxId": "20512345678",
+  "country": "PE",
+  "contactPhone": "+51 999 777 666",
+  "contactEmail": "ventas@acme.pe",
+  "website": "https://acme.pe",
+  "address": "Av. Arequipa 5678, Lima",
+  "annualBillingUsd": 250000.00,
+  "notes": "Actualizado con nueva informacion comercial"
+}
+
+###

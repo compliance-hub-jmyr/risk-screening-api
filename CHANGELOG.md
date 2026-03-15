@@ -47,13 +47,14 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - `[SUP]` `POST /api/suppliers` — create supplier with full field validation and TaxId uniqueness check
 - `[SUP]` `GET /api/suppliers` — list suppliers with pagination, filtering (legalName, commercialName, taxId, country, status, riskLevel), and configurable sorting
 - `[SUP]` `GET /api/suppliers/{id}` — retrieve supplier by ID
+- `[SUP]` `PUT /api/suppliers/{id}` — update supplier with full field validation and TaxId uniqueness check
 - `[SUP]` `SupplierFilterComposer` for composable EF Core query predicates
 - `[SUP]` `SupplierSortConfiguration` with whitelisted sort fields (default: `updatedAt DESC`)
 - `[SUP]` OpenAPI specification (`openapi-suppliers.yaml`)
 - `[SUP]` Swagger API grouping by module (All, IAM, Suppliers) with dropdown in Swagger UI
 - `[SUP]` `SchemaExamplesFilter` for realistic example values in Swagger schemas
-- `[SUP]` Unit tests: `CreateSupplierCommandHandler`, `CreateSupplierCommandValidator`, `GetAllSuppliersQueryHandler`, `GetSupplierByIdQueryHandler`
-- `[SUP]` Test infrastructure: `SupplierBuilder`, `SupplierMother`, `CreateSupplierCommandMother` with Bogus
+- `[SUP]` Unit tests: `CreateSupplierCommandHandler`, `CreateSupplierCommandValidator`, `UpdateSupplierCommandHandler`, `UpdateSupplierCommandValidator`, `GetAllSuppliersQueryHandler`, `GetSupplierByIdQueryHandler`
+- `[SUP]` Test infrastructure: `SupplierBuilder`, `SupplierMother`, `CreateSupplierCommandMother`, `UpdateSupplierCommandMother` with Bogus
 
 ### Changed
 
