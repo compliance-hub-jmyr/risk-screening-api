@@ -44,7 +44,21 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 #### Scraping Module
 
 - `[SCR]` Three named `HttpClient` registrations via `IHttpClientFactory` (OFAC, World Bank, ICIJ) with timeout and User-Agent headers
-- `[SCR]` `IMemoryCache` registration for on-demand scraping result caching
+- `[SCR]` `IMemoryCache` registration for on-demand scraping result caching (10-min TTL per source per term)
+- `[SCR]` Domain model: `RiskEntry`, `SearchResult` value objects (`Domain/Model/ValueObjects/`), `SearchRiskListsQuery` CQRS query (`Domain/Model/Queries/`)
+- `[SCR]` `IScrapingSource` application port (`Application/Ports/`) — extensible interface for scraping source adapters
+- `[SCR]` `SearchRiskListsQueryHandler` (`Application/Search/`) — MediatR CQRS handler with `IMemoryCache` caching and parallel execution via `Task.WhenAll`
+- `[SCR]` `OfacScrapingSource` (`Infrastructure/Sources/`) — adapter for real web scraping of `https://sanctionssearch.ofac.treas.gov/` (ASP.NET ViewState extraction + form POST)
+- `[SCR]` `OfacHtmlParser` (`Infrastructure/Sources/`) — static helper for OFAC HTML form data extraction and results table parsing with `HtmlAgilityPack`
+- `[SCR]` `GET /api/lists/search?q={term}&sources=ofac&sources=worldbank` — unified endpoint for all risk list searches; `sources` parameter optional (repeated query params: ofac, worldbank, icij); when omitted, queries all sources
+- `[SCR]` `SearchRiskListsQueryValidator` (`Application/Search/`) — FluentValidation validator auto-executed by `ValidationPipelineBehavior`; validates `q` is not empty and `sources` values are whitelisted
+- `[SCR]` `ScrapingResponseMapper` (`Interfaces/REST/Mappers/Response/`) — maps `SearchResult` domain objects to `ScrapingResponse` DTOs
+- `[SCR]` Response DTOs: `ScrapingResponse`, `RiskEntryResponse` with Swagger annotations
+- `[SCR]` Swagger API grouping: "Lists Module" added to dropdown
+- `[SCR]` OpenAPI specification (`openapi-lists.yaml`)
+- `[SCR]` HTTP test file (`RiskScreening.API.http`) — search requests for all sources, individual sources, error cases
+- `[SCR]` Unit tests: `OfacScrapingSourceTests` (16 tests), `SearchRiskListsQueryHandlerTests` (10 tests), `SearchResultTests` (5 tests)
+- `[SCR]` Test infrastructure: `RiskEntryMother`, `SearchResultMother`, `OfacHtmlMother`, `FakeHttpMessageHandler`
 
 #### Suppliers Module
 
