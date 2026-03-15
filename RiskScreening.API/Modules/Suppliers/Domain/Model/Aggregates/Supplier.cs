@@ -27,4 +27,34 @@ public class Supplier : AggregateRoot
     private Supplier()
     {
     }
+
+    public static Supplier Create(
+        string legalName,
+        string commercialName,
+        string taxId,
+        string country,
+        string? contactPhone = null,
+        string? contactEmail = null,
+        string? website = null,
+        string? address = null,
+        decimal? annualBillingUsd = null,
+        string? notes = null)
+    {
+        return new Supplier
+        {
+            LegalName = new LegalName(legalName),
+            CommercialName = new CommercialName(commercialName),
+            TaxId = new TaxId(taxId),
+            Country = new CountryCode(country),
+            ContactPhone = contactPhone is not null ? new PhoneNumber(contactPhone) : null,
+            ContactEmail = contactEmail is not null ? new Email(contactEmail) : null,
+            Website = website is not null ? new WebsiteUrl(website) : null,
+            Address = address is not null ? new SupplierAddress(address) : null,
+            AnnualBillingUsd = annualBillingUsd.HasValue ? new AnnualBilling(annualBillingUsd.Value) : null,
+            Notes = notes,
+            Status = SupplierStatus.Pending,
+            RiskLevel = RiskLevel.None,
+            IsDeleted = false
+        };
+    }
 }
