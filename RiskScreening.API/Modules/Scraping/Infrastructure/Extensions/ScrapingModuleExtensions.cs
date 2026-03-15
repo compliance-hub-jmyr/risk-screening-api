@@ -38,11 +38,12 @@ public static class ScrapingModuleExtensions
 
         builder.Services.AddHttpClient("WorldBank", client =>
         {
-            client.BaseAddress = new Uri("https://apigwext.worldbank.org/");
-            client.Timeout = TimeSpan.FromSeconds(30);
+            client.BaseAddress = new Uri("https://projects.worldbank.org/");
+            client.Timeout = TimeSpan.FromSeconds(45);
             client.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
-            client.DefaultRequestHeaders.Add("apikey", "z9duUaFUiEUYSHs97CU38fcZO7ipOPvm");
-            client.DefaultRequestHeaders.Add("Accept", "application/json");
+            client.DefaultRequestHeaders.Add("Accept",
+                "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+            client.DefaultRequestHeaders.Add("Accept-Language", "en-US,en;q=0.9");
         });
 
         builder.Services.AddHttpClient("Icij", client =>
