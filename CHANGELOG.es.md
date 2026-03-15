@@ -48,6 +48,7 @@ Versionado: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - `[SUP]` `GET /api/suppliers` — listar proveedores con paginación, filtros (legalName, commercialName, taxId, country, status, riskLevel) y ordenamiento configurable
 - `[SUP]` `GET /api/suppliers/{id}` — obtener proveedor por ID
 - `[SUP]` `PUT /api/suppliers/{id}` — actualizar proveedor con validación completa y verificación de unicidad de TaxId
+- `[SUP]` `DELETE /api/suppliers/{id}` — eliminación lógica (soft-delete) de proveedor
 - `[SUP]` `SupplierFilterComposer` para predicados de consulta componibles en EF Core
 - `[SUP]` `SupplierSortConfiguration` con campos de ordenamiento permitidos (default: `updatedAt DESC`)
 - `[SUP]` Especificación OpenAPI (`openapi-suppliers.yaml`)
