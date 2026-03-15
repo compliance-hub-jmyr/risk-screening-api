@@ -109,7 +109,7 @@ El feed XML de OFAC SDN (`https://www.treasury.gov/ofac/downloads/sdn.xml`) no i
 Como oficial de compliance, quiero buscar en la lista de firmas excluidas y co-excluidas del Banco Mundial, para identificar proveedores que hayan sido sancionados de participar en proyectos financiados por el Banco Mundial.
 
 **Entregable:**
-Endpoint `GET /api/lists/search?q={termino}&sources=worldbank` que realiza scraping de la pagina HTML de firmas excluidas del Banco Mundial usando `HtmlAgilityPack`, extrae las filas de tabla coincidentes y retorna un `ScrapingResponse`. Los resultados se cachean por 10 minutos por termino de busqueda.
+Endpoint `GET /api/lists/search?q={termino}&sources=worldbank` que realiza web scraping de la página de Firmas Excluidas del Banco Mundial usando `HtmlAgilityPack` para extraer la configuración del API del JavaScript embebido, luego consulta la API JSON y filtra firmas client-side (lógica OR en nombre, dirección, ciudad, estado, país, motivos). Retorna un `ScrapingResponse`. Los resultados se cachean por 10 minutos por término de búsqueda.
 
 **Dependencias:**
 - `US-SCR-001` (misma infraestructura, mismo patron)
@@ -118,10 +118,11 @@ Endpoint `GET /api/lists/search?q={termino}&sources=worldbank` que realiza scrap
 
 #### Tareas
 
-- `[BE-INFRA]` `WorldBankScrapingSource` — adaptador que implementa `IScrapingSource`; obtiene `https://projects.worldbank.org/en/projects-operations/procurement/debarred-firms?srchTerm={term}`, parsea tabla HTML con `HtmlAgilityPack`, extrae nombre de firma (mapeado a `Name`), `Address`, `Country`, `FromDate`, `ToDate`, `Grounds`; mapea a `RiskEntry` con `ListSource = "WORLD_BANK"`; retorna `SearchResult.Empty` ante fallos
+- `[BE-INFRA]` `WorldBankScrapingSource` — adaptador que implementa `IScrapingSource`; flujo de web scraping en dos pasos: (1) GET página HTML → extraer URL del API + key del JavaScript via `WorldBankHtmlParser.ExtractApiConfig()`, (2) GET API JSON → filtrar + mapear via `WorldBankHtmlParser.ParseResults()`; mapea a `RiskEntry` con `ListSource = "WORLD_BANK"`; `ToDate` muestra etiqueta "Ongoing"/"Permanent" cuando aplica; retorna `SearchResult.Empty` ante fallos
+- `[BE-INFRA]` `WorldBankHtmlParser` — helper estático unificado (mismo patrón que `OfacHtmlParser`): `ExtractApiConfig()` parsea tags `<script>` con `HtmlAgilityPack` para extraer URL del API + key usando `GeneratedRegex`; `ParseResults()` deserializa JSON `response.ZPROCSUPP`, filtra firmas por término de búsqueda (OR multi-campo, contains case-insensitive), combina componentes de dirección, y mapea `INELIGIBLY_STATUS` a `ToDate` cuando el estado es "Permanent" u "Ongoing"
 - `[BE-APP]` `SearchRiskListsQueryHandler` cachea resultado por `scraping:worldbank:{term}` por 10 min (handler compartido — no se necesita orquestador por fuente)
 - `[BE-INTERFACES]` `ListsController.Search` con `sources=worldbank` — requiere `q`; sujeto a rate limiting
-- `[BE-TEST]` Unit test: filas coincidentes retornadas, fallo de parse HTML retorna resultado vacio
+- `[BE-TEST]` `WorldBankScrapingSourceTests` (18 tests) — usa `WorldBankJsonMother` para fixtures JSON; cubre búsqueda multi-campo (nombre, dirección, país, motivos), mapeo de estado "Ongoing"/"Permanent", combinación de dirección, escenarios de error (error HTTP, JSON inválido, timeout)
 
 #### Criterios de Aceptacion
 
@@ -138,7 +139,7 @@ Endpoint `GET /api/lists/search?q={termino}&sources=worldbank` que realiza scrap
 - Then recibo HTTP 200 con `{ hits: 0, entries: [] }`
 
 **Escenario 3: Fuente Banco Mundial no disponible**
-- Given que la pagina del Banco Mundial no es accesible o retorna HTML inesperado
+- Given que la API del Banco Mundial no es accesible o retorna JSON inválido
 - When envio la peticion
 - Then recibo HTTP 200 con `{ hits: 0, entries: [] }` (tolerante a fallos)
 
@@ -329,7 +330,7 @@ Integracion de fuentes adicionales (Sanciones UE, Consejo de Seguridad ONU, INTE
 | Endpoint unificado | Un solo `GET /api/lists/search?q={term}&sources=ofac&sources=worldbank` — el parametro `sources` es opcional (query params repetidos: ofac, worldbank, icij); cuando se omite, se consultan todas las fuentes. `SearchRiskListsQueryValidator` (FluentValidation) valida la entrada antes de que el handler se ejecute |
 | Ejecucion paralela | `SearchRiskListsQueryHandler` usa `Task.WhenAll` — todas las fuentes seleccionadas se consultan concurrentemente; la latencia total es la de la fuente mas lenta, no la suma |
 | Scraping OFAC | `OfacScrapingSource` orquesta el flujo GET → POST; `OfacHtmlParser` extrae datos del formulario y parsea la tabla HTML de resultados con `HtmlAgilityPack` |
-| Parseo Banco Mundial | `HtmlAgilityPack` se usa para parseo robusto de tabla HTML |
+| Scraping Banco Mundial | Web scraping en dos pasos via `WorldBankHtmlParser` unificado: (1) `ExtractApiConfig()` scrapea tags `<script>` con `HtmlAgilityPack` para extraer URL del API + key, (2) `ParseResults()` deserializa JSON y filtra client-side (lógica OR en nombre, dirección, ciudad, estado, país, motivos); mapea "Ongoing"/"Permanent" a `toDate` |
 | Integracion ICIJ | API REST JSON; deserializacion con `System.Text.Json`; caption del nodo mapeado al campo `name` |
 | Sin deduplicacion | `SearchResult.Merge` suma hits y concatena entradas; una entidad presente en multiples listas se cuenta multiples veces — limitacion conocida de v1.0 |
 | Uso entre modulos | `SearchRiskListsQueryHandler` es consumido via MediatR por `RunScreeningCommandHandler` en el modulo Suppliers; el modulo Scraping no tiene dependencia de Suppliers |
