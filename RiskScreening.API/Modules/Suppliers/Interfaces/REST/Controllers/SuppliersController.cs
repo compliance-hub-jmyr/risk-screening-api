@@ -2,6 +2,7 @@ using Asp.Versioning;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using RiskScreening.API.Modules.Suppliers.Domain.Model.Commands;
 using RiskScreening.API.Modules.Suppliers.Domain.Model.Queries;
 using RiskScreening.API.Modules.Suppliers.Interfaces.REST.Documentation;
 using RiskScreening.API.Modules.Suppliers.Interfaces.REST.Mappers.Request;
@@ -65,5 +66,15 @@ public class SuppliersController(IMediator mediator)
         var query = new GetSupplierByIdQuery(id);
         var supplier = await mediator.Send(query, ct);
         return Ok(SupplierResponseMapper.ToResponse(supplier));
+    }
+
+    /// <inheritdoc/>
+    [HttpDelete("{id}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ApiResponseNotFound]
+    public async Task<IActionResult> Delete(string id, CancellationToken ct)
+    {
+        await mediator.Send(new DeleteSupplierCommand(id), ct);
+        return NoContent();
     }
 }
