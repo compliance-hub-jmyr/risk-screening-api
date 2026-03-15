@@ -8,13 +8,14 @@ namespace RiskScreening.API.Modules.Scraping.Infrastructure.Sources;
 ///     <a href="https://projects.worldbank.org/en/projects-operations/procurement/debarred-firms">
 ///     World Bank Debarred Firms</a> list.
 ///     <para>
-///         Unlike OFAC (HTML scraping), the World Bank exposes a JSON API that returns
-///         <b>all</b> sanctioned firms in a single GET request. Filtering is performed
-///         client-side by <see cref="WorldBankJsonParser.ParseAndFilter"/>.
+///         The World Bank page is a Kendo UI grid that loads data dynamically via AJAX.
+///         This adapter follows a two-step web scraping flow (similar to OFAC):
 ///     </para>
 ///     <list type="number">
-///         <item><b>GET</b> — fetches the full debarred firms JSON from the World Bank API.</item>
-///         <item><b>Filter</b> — matches firms by name (case-insensitive contains).</item>
+///         <item><b>GET</b> — fetches the HTML page and extracts the API URL and API key
+///         from embedded <c>&lt;script&gt;</c> tags using <see cref="WorldBankHtmlParser"/>.</item>
+///         <item><b>GET</b> — fetches the JSON API (same request the browser makes) and
+///         filters firms client-side using <see cref="WorldBankHtmlParser"/>.</item>
 ///     </list>
 ///     <para>Returns <see cref="SearchResult.Empty"/> on any failure (fault-tolerant).</para>
 /// </summary>
@@ -22,8 +23,8 @@ public sealed class WorldBankScrapingSource(
     IHttpClientFactory httpClientFactory,
     ILogger<WorldBankScrapingSource> logger) : IScrapingSource
 {
-    private const string Endpoint =
-        "dvsvc/v1.0/json/APPLICATION/ADOBE_EXPRNCE_MGR/FIRM/SANCTIONED_FIRM";
+    private const string PagePath =
+        "en/projects-operations/procurement/debarred-firms";
 
     /// <inheritdoc />
     public string SourceName => "WORLD_BANK";
@@ -35,11 +36,29 @@ public sealed class WorldBankScrapingSource(
         {
             var client = httpClientFactory.CreateClient("WorldBank");
 
-            var response = await client.GetAsync(Endpoint, ct);
-            response.EnsureSuccessStatusCode();
+            // Step 1: GET the HTML page → extract API config from JavaScript
+            var pageResponse = await client.GetAsync(PagePath, ct);
+            pageResponse.EnsureSuccessStatusCode();
 
-            var json = await response.Content.ReadAsStringAsync(ct);
-            var entries = WorldBankJsonParser.ParseAndFilter(json, term, logger);
+            var html = await pageResponse.Content.ReadAsStringAsync(ct);
+            var (apiUrl, apiKey) = WorldBankHtmlParser.ExtractApiConfig(html);
+
+            if (apiUrl is null || apiKey is null)
+            {
+                logger.LogWarning(
+                    "World Bank: could not extract API config from page HTML");
+                return SearchResult.Empty;
+            }
+
+            // Step 2: GET the JSON API (the same request the browser makes via AJAX)
+            var apiRequest = new HttpRequestMessage(HttpMethod.Get, apiUrl);
+            apiRequest.Headers.Add("apikey", apiKey);
+
+            var apiResponse = await client.SendAsync(apiRequest, ct);
+            apiResponse.EnsureSuccessStatusCode();
+
+            var json = await apiResponse.Content.ReadAsStringAsync(ct);
+            var entries = WorldBankHtmlParser.ParseResults(json, term, logger);
 
             logger.LogDebug(
                 "World Bank search completed — Term={Term}, Hits={Hits}",
