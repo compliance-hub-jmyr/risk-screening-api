@@ -42,7 +42,7 @@ public class GetAllSuppliersQueryHandlerTests
             SupplierMother.Pending().Build(),
             SupplierMother.Pending().Build()
         };
-        _supplierRepository.Query().Returns(suppliers.AsQueryable().BuildMock());
+        _supplierRepository.Query().Returns(suppliers.AsQueryable().AsEnumerable().BuildMock());
 
         // Act
         var result = await _sut.Handle(new GetAllSuppliersQuery(), CancellationToken.None);
@@ -74,7 +74,7 @@ public class GetAllSuppliersQueryHandlerTests
     public async Task Handle_EmptyRepository_ReturnsEmptyPage()
     {
         // Arrange
-        _supplierRepository.Query().Returns(new List<Supplier>().AsQueryable().BuildMock());
+        _supplierRepository.Query().Returns(new List<Supplier>().AsQueryable().AsEnumerable().BuildMock());
 
         // Act
         var result = await _sut.Handle(new GetAllSuppliersQuery(), CancellationToken.None);
@@ -92,7 +92,7 @@ public class GetAllSuppliersQueryHandlerTests
         var suppliers = Enumerable.Range(0, 5)
             .Select(_ => SupplierMother.Pending().Build())
             .ToList();
-        _supplierRepository.Query().Returns(suppliers.AsQueryable().BuildMock());
+        _supplierRepository.Query().Returns(suppliers.AsQueryable().AsEnumerable().BuildMock());
 
         var query = new GetAllSuppliersQuery(Page: 1, Size: 2);
 
@@ -118,7 +118,7 @@ public class GetAllSuppliersQueryHandlerTests
         var suppliers = Enumerable.Range(0, 3)
             .Select(_ => SupplierMother.Pending().Build())
             .ToList();
-        _supplierRepository.Query().Returns(suppliers.AsQueryable().BuildMock());
+        _supplierRepository.Query().Returns(suppliers.AsQueryable().AsEnumerable().BuildMock());
 
         var query = new GetAllSuppliersQuery(Page: 0, Size: 2);
 
@@ -139,7 +139,7 @@ public class GetAllSuppliersQueryHandlerTests
         var suppliers = Enumerable.Range(0, 3)
             .Select(_ => SupplierMother.Pending().Build())
             .ToList();
-        _supplierRepository.Query().Returns(suppliers.AsQueryable().BuildMock());
+        _supplierRepository.Query().Returns(suppliers.AsQueryable().AsEnumerable().BuildMock());
 
         var query = new GetAllSuppliersQuery(Page: 1, Size: 2);
 
@@ -160,7 +160,7 @@ public class GetAllSuppliersQueryHandlerTests
         // Arrange
         var pe = SupplierMother.Pending().WithCountry("PE").Build();
         var us = SupplierMother.Pending().WithCountry("US").Build();
-        _supplierRepository.Query().Returns(new List<Supplier> { pe, us }.AsQueryable().BuildMock());
+        _supplierRepository.Query().Returns(new List<Supplier> { pe, us }.AsQueryable().AsEnumerable().BuildMock());
 
         var query = new GetAllSuppliersQuery(Country: "PE");
 
@@ -179,7 +179,7 @@ public class GetAllSuppliersQueryHandlerTests
         var pending = SupplierMother.Pending().Build();
         var approved = SupplierMother.Pending().Build();
         approved.Approve();
-        _supplierRepository.Query().Returns(new List<Supplier> { pending, approved }.AsQueryable().BuildMock());
+        _supplierRepository.Query().Returns(new List<Supplier> { pending, approved }.AsQueryable().AsEnumerable().BuildMock());
 
         var query = new GetAllSuppliersQuery(Status: "Approved");
 
@@ -196,7 +196,7 @@ public class GetAllSuppliersQueryHandlerTests
     {
         // Arrange
         var supplier = SupplierMother.Pending().WithCountry("PE").Build();
-        _supplierRepository.Query().Returns(new List<Supplier> { supplier }.AsQueryable().BuildMock());
+        _supplierRepository.Query().Returns(new List<Supplier> { supplier }.AsQueryable().AsEnumerable().BuildMock());
 
         var query = new GetAllSuppliersQuery(Country: "JP");
 
