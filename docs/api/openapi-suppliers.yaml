@@ -259,6 +259,29 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+    delete:
+      summary: Eliminar proveedor (soft-delete)
+      description: |
+        Marca un proveedor como eliminado (soft-delete).
+        El proveedor no sera visible en listados ni consultas posteriores.
+
+        **Errores posibles:**
+        - 404: Proveedor no encontrado o ya eliminado
+      tags: [Suppliers]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID del proveedor (UUID)
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Proveedor eliminado exitosamente
+        '404':
+          $ref: '#/components/responses/NotFound'
+
 components:
   securitySchemes:
     BearerAuth:

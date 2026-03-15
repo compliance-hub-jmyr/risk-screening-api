@@ -66,6 +66,13 @@ Authorization: Bearer {{token}}
 
 ###
 
+### Delete Supplier
+DELETE http://localhost:5215/api/suppliers/{{supplierId}}
+Api-Version: 1
+Authorization: Bearer {{token}}
+
+###
+
 ### Update Supplier
 PUT http://localhost:5215/api/suppliers/{{supplierId}}
 Api-Version: 1
