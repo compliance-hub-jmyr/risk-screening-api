@@ -1,4 +1,5 @@
 using Asp.Versioning;
+using AspNetCoreRateLimit;
 using FluentValidation;
 using RiskScreening.API.Shared.Domain.Repositories;
 using RiskScreening.API.Shared.Infrastructure.Configuration;
@@ -93,6 +94,34 @@ public static class WebApplicationBuilderExtensions
                     policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader();
             });
         });
+    }
+
+    /// <summary>
+    ///     Registers IP-based rate limiting with tiered rules via <c>AspNetCoreRateLimit</c>.
+    ///     <list type="bullet">
+    ///         <item><c>POST /api/authentication/sign-in</c> — 5 req/min (brute-force protection)</item>
+    ///         <item><c>GET /api/lists/*</c> — 20 req/min (external source protection)</item>
+    ///         <item><c>*:/api/*</c> — 100 req/min (general fallback)</item>
+    ///     </list>
+    ///     Reads rules from the <c>IpRateLimiting</c> section in configuration.
+    /// </summary>
+    public static void AddRateLimiting(this WebApplicationBuilder builder)
+    {
+        builder.Services.Configure<IpRateLimitOptions>(
+            builder.Configuration.GetSection("IpRateLimiting"));
+
+        builder.Services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
+        builder.Services.AddInMemoryRateLimiting();
+    }
+
+    /// <summary>
+    ///     Adds IP rate limiting middleware to the request pipeline.
+    ///     Must be called <b>before</b> <c>UseAuthentication</c> so rate limiting
+    ///     rejects excessive requests before JWT validation runs.
+    /// </summary>
+    public static void UseRateLimiting(this WebApplication app)
+    {
+        app.UseIpRateLimiting();
     }
 
     /// <summary>

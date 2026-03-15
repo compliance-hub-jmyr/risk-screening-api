@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using RiskScreening.API.Modules.IAM.Infrastructure.Extensions;
+using RiskScreening.API.Modules.Scraping.Infrastructure.Extensions;
 using RiskScreening.API.Modules.Suppliers.Infrastructure.Extensions;
 using RiskScreening.API.Shared.Infrastructure.Documentation.OpenApi.Extensions;
 using RiskScreening.API.Shared.Infrastructure.Extensions;
@@ -39,11 +40,14 @@ builder.AddMediator(typeof(Program));
 // Shared infrastructure: IUnitOfWork and cross-cutting services
 builder.AddSharedInfrastructure();
 
+// IP rate limiting — tiered: sign-in 5/min, lists 20/min, general 100/min
+builder.AddRateLimiting();
+
 // IAM module: repositories, BCrypt, JWT auth, seeder
 builder.AddIamModule();
 
-/*// Scraping module: HTTP clients, IMemoryCache, rate limiting
-builder.AddScrapingModule();*/
+// Scraping module: HTTP clients, IMemoryCache
+builder.AddScrapingModule();
 
 // Suppliers module: repositories, EF configurations
 builder.AddSuppliersModule();
@@ -80,8 +84,11 @@ if (app.Environment.IsDevelopment())
 // Applies the AllowAllPolicy registered by AddCorsPolicy()
 app.UseCorsPolicy();
 
-/*// IP rate limiting — must run before auth (20 req/min on /api/v1/lists/*)
-app.UseScrapingModule();*/
+// Rewrites rate-limit 429 responses to standard ErrorResponse JSON format
+app.UseMiddleware<RateLimitResponseMiddleware>();
+
+// IP rate limiting — must run before auth (tiered: sign-in 5/min, lists 20/min, general 100/min)
+app.UseRateLimiting();
 
 // Assigns X-Correlation-ID to every request and pushes it into Serilog LogContext
 app.UseMiddleware<CorrelationIdMiddleware>();

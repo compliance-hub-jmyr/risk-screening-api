@@ -33,22 +33,42 @@ Se eligió `AspNetCoreRateLimit` sobre el `SlidingWindowRateLimiter` nativo porq
 - Soporta overrides por cliente (`ClientRateLimitPolicies`) de forma nativa
 - Paquete maduro con uso extensivo en producción en APIs ASP.NET
 
-> **Nota:** El diseño inicial particionaba por el header `X-Api-Key`. Dado que la autenticación por API Key fue eliminada (ver [ADR-0003](./0003-jwt-authentication.es.md)), la partición se realiza ahora por IP del cliente (`ClientIdHeader: "X-Forwarded-For"`). El límite aplica únicamente a `/api/lists/*`.
+> **Nota:** El diseño inicial particionaba por el header `X-Api-Key`. Dado que la autenticación por API Key fue eliminada (ver [ADR-0003](./0003-jwt-authentication.es.md)), la partición se realiza ahora por IP del cliente (`ClientIdHeader: "X-Forwarded-For"`).
+
+### Estrategia de rate limiting escalonado
+
+Las reglas se evalúan de la más específica a la más general:
+
+| Endpoint | Límite | Justificación |
+|----------|--------|---------------|
+| `POST /api/authentication/sign-in` | 5 req/min | Endpoint público — protección contra fuerza bruta |
+| `GET /api/lists/*` | 20 req/min | Protección de fuentes externas (requerimiento de spec) |
+| `*:/api/*` | 100 req/min | Fallback general para endpoints CRUD autenticados |
 
 ### Configuración en `appsettings.json`
 
 ```json
 {
-  "ClientRateLimiting": {
+  "IpRateLimiting": {
     "EnableEndpointRateLimiting": true,
     "StackBlockedRequests": false,
-    "ClientIdHeader": "X-Forwarded-For",
+    "RealIpHeader": "X-Forwarded-For",
     "HttpStatusCode": 429,
     "GeneralRules": [
+      {
+        "Endpoint": "POST:/api/authentication/sign-in",
+        "Period":   "1m",
+        "Limit":    5
+      },
       {
         "Endpoint": "GET:/api/lists/*",
         "Period":   "1m",
         "Limit":    20
+      },
+      {
+        "Endpoint": "*:/api/*",
+        "Period":   "1m",
+        "Limit":    100
       }
     ]
   }
@@ -88,7 +108,7 @@ Content-Type: application/json
 
 **Positivo:**
 - Las reglas son completamente declarativas en `appsettings.json` — ajustables sin recompilar
-- `EnableEndpointRateLimiting: true` limita el scope a `/api/lists/*` solamente — otros endpoints no se ven afectados
+- `EnableEndpointRateLimiting: true` habilita reglas por endpoint — límites escalonados protegen sign-in, scraping y API general de forma independiente
 - Header `Retry-After` estándar (RFC 6585) en la respuesta 429
 - Contadores en memoria — no se requiere Redis para la Fase 1
 

@@ -33,22 +33,42 @@ Use **`AspNetCoreRateLimit`** (`AspNetCoreRateLimit 5.0.0` NuGet package) config
 - Supports client-specific overrides (`ClientRateLimitPolicies`) out of the box
 - Mature package with extensive real-world usage in production ASP.NET APIs
 
-> **Note:** The initial design partitioned by `X-Api-Key` header. Since API Key authentication was removed (see [ADR-0003](./0003-jwt-authentication.md)), the partition is now by client IP (`ClientIdHeader: "X-Forwarded-For"`). The limit still applies to `/api/lists/*` only.
+> **Note:** The initial design partitioned by `X-Api-Key` header. Since API Key authentication was removed (see [ADR-0003](./0003-jwt-authentication.md)), the partition is now by client IP (`ClientIdHeader: "X-Forwarded-For"`).
+
+### Tiered rate limiting strategy
+
+Rules are evaluated from most specific to most general:
+
+| Endpoint | Limit | Rationale |
+|----------|-------|-----------|
+| `POST /api/authentication/sign-in` | 5 req/min | Public endpoint — brute-force protection |
+| `GET /api/lists/*` | 20 req/min | External source protection (spec requirement) |
+| `*:/api/*` | 100 req/min | General fallback for authenticated CRUD endpoints |
 
 ### Configuration in `appsettings.json`
 
 ```json
 {
-  "ClientRateLimiting": {
+  "IpRateLimiting": {
     "EnableEndpointRateLimiting": true,
     "StackBlockedRequests": false,
-    "ClientIdHeader": "X-Forwarded-For",
+    "RealIpHeader": "X-Forwarded-For",
     "HttpStatusCode": 429,
     "GeneralRules": [
+      {
+        "Endpoint": "POST:/api/authentication/sign-in",
+        "Period":   "1m",
+        "Limit":    5
+      },
       {
         "Endpoint": "GET:/api/lists/*",
         "Period":   "1m",
         "Limit":    20
+      },
+      {
+        "Endpoint": "*:/api/*",
+        "Period":   "1m",
+        "Limit":    100
       }
     ]
   }
@@ -88,7 +108,7 @@ Content-Type: application/json
 
 **Positive:**
 - Rules are fully declarative in `appsettings.json` — tunable without recompiling
-- `EnableEndpointRateLimiting: true` scopes the limit to `/api/lists/*` only — other endpoints are unaffected
+- `EnableEndpointRateLimiting: true` enables per-endpoint rules — tiered limits protect sign-in, scraping, and general API independently
 - Standard `Retry-After` header (RFC 6585) in the 429 response
 - In-memory counters — no Redis required for Phase 1
 

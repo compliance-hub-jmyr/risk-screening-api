@@ -26,6 +26,8 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - `[INFRA]` API versioning via `Api-Version` header
 - `[INFRA]` CORS policy with configuration-based allowed origins
 - `[INFRA]` Serilog structured logging with `CorrelationIdMiddleware` for request tracing
+- `[INFRA]` IP-based rate limiting via `AspNetCoreRateLimit` with tiered rules: sign-in (5 req/min), scraping lists (20 req/min), general API (100 req/min)
+- `[INFRA]` `RateLimitResponseMiddleware` — rewrites 429 responses to standard `ErrorResponse` (RFC 7807) format with `RATE_LIMIT_EXCEEDED` error code
 - `[INFRA]` Docker Compose setup with API + SQL Server services
 - `[INFRA]` Snake-case naming convention for EF Core entity mappings
 
@@ -38,6 +40,11 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - `[IAM]` Data seeder for default roles and admin user
 - `[IAM]` OpenAPI specification (`openapi-iam.yaml`)
 - `[IAM]` Unit tests: `SignInCommandHandler`, `SignInCommandValidator`, `GetCurrentUserQueryHandler`
+
+#### Scraping Module
+
+- `[SCR]` Three named `HttpClient` registrations via `IHttpClientFactory` (OFAC, World Bank, ICIJ) with timeout and User-Agent headers
+- `[SCR]` `IMemoryCache` registration for on-demand scraping result caching
 
 #### Suppliers Module
 
