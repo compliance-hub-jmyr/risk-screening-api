@@ -125,6 +125,9 @@ public static class WebApplicationBuilderExtensions
 
             // Registers ErrorResponse in /components/schemas so $ref links resolve in Swagger UI
             options.DocumentFilter<ErrorResponseDocumentFilter>();
+
+            // Injects realistic example values into request/response schemas
+            options.SchemaFilter<SchemaExamplesFilter>();
         });
     }
 }
