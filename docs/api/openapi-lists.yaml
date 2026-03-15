@@ -264,7 +264,7 @@ components:
         toDate:
           type: string
           nullable: true
-          description: Fecha de fin de inhabilitacion (World Bank)
+          description: Fecha de fin de inhabilitacion (World Bank). Puede ser una fecha o un estado de inelegibilidad ("Ongoing", "Permanent")
           example: "2025-01-15"
         grounds:
           type: string
