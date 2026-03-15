@@ -4,12 +4,12 @@
 `Accepted`
 
 ## Date
-2026-03-13
+2026-03-15 (Updated)
 
 ## Context
 
 The Scraping module requires obtaining data from three external sources:
-1. **OFAC SDN** — US Treasury, available as a public XML feed
+1. **OFAC SDN** — US Treasury Sanctions List Search (web form at `https://sanctionssearch.ofac.treas.gov/`)
 2. **World Bank Debarred Firms** — Web page with a paginated HTML table
 3. **ICIJ Offshore Leaks** — Public REST API (per-query search; no full dataset download)
 
@@ -36,10 +36,18 @@ This approach is simpler to implement and operate in Phase 1, avoids the complex
 ### Strategy by source
 
 #### OFAC SDN
-- Source: `https://sdn.ofac.treas.gov/SDN_XML.zip` (public ZIP containing SDN XML)
-- Method: Download ZIP, decompress in-memory, parse XML with `System.Xml.Linq`
-- Cache key: `scraping:ofac:{normalizedQuery}`
-- TTL: **10 minutes**
+- **Assessment reference**: `https://sanctionssearch.ofac.treas.gov/` (ASP.NET web form with search functionality)
+- **Method**: Real web scraping via `HtmlAgilityPack`
+  1. `OfacScrapingSource` (adapter) orchestrates the HTTP flow: GET initial page → POST search form
+  2. `OfacHtmlParser` (static helper) handles HTML extraction:
+     - `ExtractFormData()` — parses ASP.NET ViewState and hidden fields from the initial page
+     - `ParseResults()` — locates the `#scrollResults` table and converts rows into `RiskEntry` records
+  3. Extracted columns: Name, Address, Type, Program(s), List, **Score** (match confidence percentage)
+- **Architecture**: Ports & Adapters — `IScrapingSource` port in `Application/Ports/`, `OfacScrapingSource` adapter in `Infrastructure/Sources/`, orchestration via `SearchRiskListsQueryHandler` (MediatR CQRS handler in `Application/Search/`)
+- **Why not XML?** The XML feed (`https://www.treasury.gov/ofac/downloads/sdn.xml`) does not include the **Score** field, which is a critical requirement for the technical assessment. The Score represents the match confidence percentage calculated by OFAC's search algorithm.
+- **Cache key**: `scraping:ofac:{normalizedQuery}`
+- **TTL**: **10 minutes**
+- **HTTP Client timeout**: 45 seconds (increased to handle form submission + parsing)
 
 #### World Bank Debarred Firms
 - Source: `https://projects.worldbank.org/en/projects-operations/procurement/debarred-firms?srchTerm={query}`
@@ -53,14 +61,16 @@ This approach is simpler to implement and operate in Phase 1, avoids the complex
 - Cache key: `scraping:icij:{normalizedQuery}`
 - TTL: **10 minutes**
 
-### Error handling
+### Error handling (fault-tolerant)
 
 ```
 If a live fetch fails (timeout, HTTP error, parse error):
   - Log error at WARNING level
-  - Return a structured error response (503 / partial result)
+  - Return SearchResult.Empty (hits: 0, entries: []) — NOT an HTTP error
   - Do NOT write a failed result to cache
   - The next request will retry the live fetch
+  - When searching all sources (GET /api/lists/search?q=term), a single source failure
+    does not prevent other sources from returning results
 ```
 
 ## Consequences
@@ -72,8 +82,9 @@ If a live fetch fails (timeout, HTTP error, parse error):
 - No stale data risk from a worker that failed to refresh
 
 **Negative:**
-- First request for a new query term incurs live fetch latency (OFAC XML download can take 1–3 s)
+- First request for a new query term incurs live fetch latency (OFAC form submission + HTML parsing can take 2–5 s)
 - If the external source is unavailable at query time, the request fails (no pre-cached fallback)
+- OFAC scraping is more fragile than XML parsing — changes to the ASP.NET form structure or HTML table format will break the scraper
 
 **Mitigation:**
 - Use `Polly` retry + timeout policies on all HTTP clients to reduce transient failure impact
@@ -83,10 +94,9 @@ If a live fetch fails (timeout, HTTP error, parse error):
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| `HtmlAgilityPack` | 1.11.x | HTML parsing for World Bank |
-| `System.Xml.Linq` | .NET 10 | XML parsing for OFAC SDN |
+| `HtmlAgilityPack` | 1.11.71 | HTML parsing for OFAC and World Bank |
 | `Microsoft.Extensions.Http` | .NET 10 | `HttpClientFactory` for typed clients |
-| `Polly` | 8.x | Retry and timeout policies for HTTP requests |
+| `Polly` | 8.x (future) | Retry and timeout policies for HTTP requests |
 
 ## References
 - [OFAC SDN List Downloads](https://www.treasury.gov/resource-center/sanctions/SDN-List/Pages/default.aspx)

@@ -52,7 +52,8 @@ public class SuppliersController(IMediator mediator)
         [FromQuery] string? sortDirection,
         CancellationToken ct)
     {
-        var query = new GetAllSuppliersQuery(legalName, commercialName, taxId, country, status, riskLevel, page, size, sortBy, sortDirection);
+        var query = new GetAllSuppliersQuery(legalName, commercialName, taxId, country, status, riskLevel, page, size,
+            sortBy, sortDirection);
         var result = await mediator.Send(query, ct);
         return Ok(SupplierResponseMapper.ToPageResponse(result));
     }

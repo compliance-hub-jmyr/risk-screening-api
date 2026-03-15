@@ -93,3 +93,52 @@ Authorization: Bearer {{token}}
 }
 
 ###
+
+### Search all risk lists (no sources filter — queries OFAC, World Bank, ICIJ)
+GET http://localhost:5215/api/lists/search?q=john doe
+Api-Version: 1
+Authorization: Bearer {{token}}
+
+###
+
+### Search OFAC only
+GET http://localhost:5215/api/lists/search?q=lazarus group&sources=ofac
+Api-Version: 1
+Authorization: Bearer {{token}}
+
+###
+
+### Search World Bank only
+GET http://localhost:5215/api/lists/search?q=acme corp&sources=worldbank
+Api-Version: 1
+Authorization: Bearer {{token}}
+
+###
+
+### Search ICIJ only
+GET http://localhost:5215/api/lists/search?q=mossack fonseca&sources=icij
+Api-Version: 1
+Authorization: Bearer {{token}}
+
+###
+
+### Search OFAC + World Bank (multiple sources)
+GET http://localhost:5215/api/lists/search?q=global corp&sources=ofac&sources=worldbank
+Api-Version: 1
+Authorization: Bearer {{token}}
+
+###
+
+### Search with missing query parameter (expect 400 — ValidationPipelineBehavior)
+GET http://localhost:5215/api/lists/search
+Api-Version: 1
+Authorization: Bearer {{token}}
+
+###
+
+### Search with invalid sources (expect 400 — ValidationPipelineBehavior)
+GET http://localhost:5215/api/lists/search?q=test&sources=invalid
+Api-Version: 1
+Authorization: Bearer {{token}}
+
+###

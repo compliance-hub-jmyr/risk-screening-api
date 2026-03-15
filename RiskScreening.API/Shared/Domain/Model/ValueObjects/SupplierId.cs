@@ -20,6 +20,13 @@ public record SupplierId : ValueObject
         Value = value;
     }
 
-    public override string ToString() => Value;
-    public static implicit operator string(SupplierId id) => id.Value;
+    public override string ToString()
+    {
+        return Value;
+    }
+
+    public static implicit operator string(SupplierId id)
+    {
+        return id.Value;
+    }
 }

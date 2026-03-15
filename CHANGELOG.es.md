@@ -44,7 +44,21 @@ Versionado: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 #### Módulo Scraping
 
 - `[SCR]` Tres registros de `HttpClient` nombrados via `IHttpClientFactory` (OFAC, World Bank, ICIJ) con timeout y headers User-Agent
-- `[SCR]` Registro de `IMemoryCache` para cache bajo demanda de resultados de scraping
+- `[SCR]` Registro de `IMemoryCache` para cache bajo demanda de resultados de scraping (TTL 10 min por fuente por término)
+- `[SCR]` Modelo de dominio: value objects `RiskEntry`, `SearchResult` (`Domain/Model/ValueObjects/`), query CQRS `SearchRiskListsQuery` (`Domain/Model/Queries/`)
+- `[SCR]` Puerto de aplicación `IScrapingSource` (`Application/Ports/`) — interfaz extensible para adaptadores de fuentes de scraping
+- `[SCR]` `SearchRiskListsQueryHandler` (`Application/Search/`) — handler CQRS de MediatR con cache `IMemoryCache` y ejecución paralela via `Task.WhenAll`
+- `[SCR]` `OfacScrapingSource` (`Infrastructure/Sources/`) — adaptador para web scraping real de `https://sanctionssearch.ofac.treas.gov/` (extracción de ViewState ASP.NET + POST de formulario)
+- `[SCR]` `OfacHtmlParser` (`Infrastructure/Sources/`) — helper estático para extracción de datos del formulario HTML de OFAC y parsing de tabla de resultados con `HtmlAgilityPack`
+- `[SCR]` `GET /api/lists/search?q={term}&sources=ofac&sources=worldbank` — endpoint unificado para búsquedas en listas de riesgo; parámetro `sources` opcional (query params repetidos: ofac, worldbank, icij); cuando se omite, consulta todas las fuentes
+- `[SCR]` `SearchRiskListsQueryValidator` (`Application/Search/`) — validador FluentValidation ejecutado automáticamente por `ValidationPipelineBehavior`; valida que `q` no esté vacío y que los valores de `sources` estén en la whitelist
+- `[SCR]` `ScrapingResponseMapper` (`Interfaces/REST/Mappers/Response/`) — mapea objetos de dominio `SearchResult` a DTOs `ScrapingResponse`
+- `[SCR]` DTOs de respuesta: `ScrapingResponse`, `RiskEntryResponse` con anotaciones Swagger
+- `[SCR]` Agrupación de API en Swagger: "Lists Module" agregado al dropdown
+- `[SCR]` Especificación OpenAPI (`openapi-lists.yaml`)
+- `[SCR]` Archivo HTTP de pruebas (`RiskScreening.API.http`) — requests de búsqueda para todas las fuentes, fuentes individuales, casos de error
+- `[SCR]` Tests unitarios: `OfacScrapingSourceTests` (16 tests), `SearchRiskListsQueryHandlerTests` (10 tests), `SearchResultTests` (5 tests)
+- `[SCR]` Infraestructura de tests: `RiskEntryMother`, `SearchResultMother`, `OfacHtmlMother`, `FakeHttpMessageHandler`
 
 #### Módulo Suppliers
 

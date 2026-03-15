@@ -1,0 +1,360 @@
+openapi: 3.1.0
+info:
+  title: Risk Screening Platform — Lists Module (Scraping)
+  version: 1.0.0
+  description: |
+    API de busqueda en listas de riesgo para la plataforma Risk Screening.
+
+    ## Autenticacion
+    Todos los endpoints requieren un JWT Bearer token obtenido via `POST /api/authentication/sign-in`.
+
+    ## Endpoint unificado
+    Un unico endpoint `GET /api/lists/search` permite buscar en una o mas fuentes de riesgo.
+    El parametro `sources` acepta una lista de nombres de fuente (`ofac`, `worldbank`, `icij`)
+    como parametros de query repetidos (e.g. `?sources=ofac&sources=worldbank`).
+    Cuando se omite, se consultan todas las fuentes registradas.
+
+    ## Arquitectura
+    Sigue el patron Ports & Adapters con CQRS via MediatR:
+    - **Puerto:** `IScrapingSource` (`Application/Ports/`)
+    - **Adaptadores:** `OfacScrapingSource`, etc. (`Infrastructure/Sources/`)
+    - **Handler:** `SearchRiskListsQueryHandler` (`Application/Search/`)
+    - **Validacion:** `SearchRiskListsQueryValidator` via `ValidationPipelineBehavior` (FluentValidation)
+
+    ## Fuentes disponibles
+    | Fuente | Descripcion |
+    |--------|-------------|
+    | `ofac` | OFAC SDN — Lista de Nacionales Especialmente Designados del Departamento del Tesoro de EE.UU. |
+    | `worldbank` | World Bank Debarred Firms — Registro de firmas excluidas del Banco Mundial |
+    | `icij` | ICIJ Offshore Leaks — Base de datos de entidades offshore (Panama Papers, Paradise Papers, etc.) |
+
+    ## Cache
+    Cada resultado de fuente se cachea de forma independiente por 10 minutos (clave: `scraping:{source}:{term}`).
+
+    ## Tolerancia a fallos
+    Si una fuente externa no esta disponible, se retorna `SearchResult.Empty` (hits: 0, entries: []) para esa fuente.
+    Las demas fuentes continuan retornando resultados normalmente.
+  contact:
+    name: EY Technical Assessment
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:5215
+    description: Local Development (dotnet run)
+
+security:
+  - BearerAuth: []
+
+tags:
+  - name: Lists
+    description: Busqueda en listas de riesgo externas (OFAC, World Bank, ICIJ)
+
+paths:
+  /api/lists/search:
+    get:
+      summary: Buscar en listas de riesgo
+      description: |
+        Busca en las fuentes de riesgo seleccionadas en paralelo y retorna resultados combinados.
+
+        El parametro `sources` acepta una lista de nombres de fuente como parametros
+        de query repetidos (`?sources=ofac&sources=worldbank`).
+        Cuando se omite, se consultan todas las fuentes registradas.
+        Cada resultado de fuente se cachea de forma independiente por 10 minutos.
+
+        **Ejemplos:**
+        - Todas las fuentes: `GET /api/lists/search?q=john doe`
+        - Solo OFAC: `GET /api/lists/search?q=john doe&sources=ofac`
+        - OFAC y World Bank: `GET /api/lists/search?q=john doe&sources=ofac&sources=worldbank`
+
+        **Validacion (FluentValidation via `ValidationPipelineBehavior`):**
+        - `q` es obligatorio y no puede estar vacio
+        - Cada valor de `sources` debe ser uno de: `ofac`, `worldbank`, `icij`
+        - Errores de validacion retornan 400 con formato `ErrorResponse` (RFC 7807) incluyendo `fieldErrors[]`
+
+        **Errores posibles:**
+        - 400: Parametro `q` ausente o fuentes invalidas (con `fieldErrors`)
+        - 401: Token JWT ausente o invalido
+        - 429: Rate limit excedido (20 req/min por IP)
+      tags: [Lists]
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Termino de busqueda (nombre de persona o entidad)
+          schema:
+            type: string
+          example: john doe
+        - name: sources
+          in: query
+          required: false
+          description: |
+            Lista de fuentes a consultar (parametros de query repetidos).
+            Valores validos: `ofac`, `worldbank`, `icij`.
+            Cuando se omite, se consultan todas las fuentes.
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [ofac, worldbank, icij]
+          style: form
+          explode: true
+          example: [ofac, worldbank]
+      responses:
+        '200':
+          description: Resultados de busqueda
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScrapingResponse'
+              examples:
+                matches_found:
+                  summary: Coincidencias encontradas (OFAC con Score)
+                  value:
+                    hits: 2
+                    entries:
+                      - listSource: OFAC
+                        name: LAZARUS GROUP
+                        address: Potonggang District
+                        type: Entity
+                        list: SDN
+                        programs: ["DPRK3"]
+                        score: 100
+                        country: null
+                        fromDate: null
+                        toDate: null
+                        grounds: null
+                        jurisdiction: null
+                        linkedTo: null
+                        dataFrom: null
+                      - listSource: WORLD_BANK
+                        name: John Doe Corp
+                        address: "456 Business Ave, London"
+                        type: null
+                        list: null
+                        programs: null
+                        score: null
+                        country: GB
+                        fromDate: "2020-01-15"
+                        toDate: "2025-01-15"
+                        grounds: Fraudulent practice
+                        jurisdiction: null
+                        linkedTo: null
+                        dataFrom: null
+                no_matches:
+                  summary: Sin coincidencias
+                  value:
+                    hits: 0
+                    entries: []
+        '400':
+          description: Error de validacion (FluentValidation via ValidationPipelineBehavior)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missing_query:
+                  summary: Parametro q ausente
+                  value:
+                    type: "https://tools.ietf.org/html/rfc7807"
+                    title: Validation Failed
+                    status: 400
+                    errorNumber: 1000
+                    errorCode: VALIDATION_FAILED
+                    message: One or more validation errors occurred.
+                    fieldErrors:
+                      - field: Term
+                        message: "Query parameter 'q' is required."
+                        rejectedValue: ""
+                invalid_sources:
+                  summary: Fuente invalida
+                  value:
+                    type: "https://tools.ietf.org/html/rfc7807"
+                    title: Validation Failed
+                    status: 400
+                    errorNumber: 1000
+                    errorCode: VALIDATION_FAILED
+                    message: One or more validation errors occurred.
+                    fieldErrors:
+                      - field: "SourceNames[0]"
+                        message: "Invalid source 'invalid'. Valid values: ofac, worldbank, icij."
+                        rejectedValue: invalid
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtenido via POST /api/authentication/sign-in
+
+  schemas:
+    ScrapingResponse:
+      type: object
+      properties:
+        hits:
+          type: integer
+          description: Numero total de coincidencias encontradas en la(s) fuente(s) consultada(s)
+          example: 2
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/RiskEntryResponse'
+          description: Lista de entradas de riesgo coincidentes
+
+    RiskEntryResponse:
+      type: object
+      description: |
+        Entrada unica de riesgo. Los campos no aplicables a una fuente se retornan como `null`.
+        - OFAC: `listSource`, `name`, `address`, `type`, `list`, `programs`, `score`
+        - World Bank: `listSource`, `name`, `address`, `country`, `fromDate`, `toDate`, `grounds`
+        - ICIJ: `listSource`, `name`, `jurisdiction`, `linkedTo`, `dataFrom`
+      properties:
+        listSource:
+          type: string
+          description: Identificador de la fuente (OFAC, WORLD_BANK, ICIJ)
+          example: OFAC
+        name:
+          type: string
+          nullable: true
+          description: Nombre de la entidad
+          example: LAZARUS GROUP
+        address:
+          type: string
+          nullable: true
+          description: Direccion fisica (OFAC, World Bank)
+          example: Potonggang District
+        type:
+          type: string
+          nullable: true
+          description: Tipo de entidad (OFAC — Individual, Entity, Vessel, Aircraft)
+          example: Entity
+        list:
+          type: string
+          nullable: true
+          description: Nombre de la lista de sanciones (OFAC)
+          example: SDN
+        programs:
+          type: array
+          items:
+            type: string
+          nullable: true
+          description: Programas de sanciones (OFAC)
+          example: ["DPRK3"]
+        score:
+          type: number
+          format: double
+          nullable: true
+          description: Puntuacion de confianza de coincidencia (OFAC — solo disponible via web scraping)
+          example: 100
+        country:
+          type: string
+          nullable: true
+          description: Pais (World Bank)
+          example: GB
+        fromDate:
+          type: string
+          nullable: true
+          description: Fecha de inicio de inhabilitacion (World Bank)
+          example: "2020-01-15"
+        toDate:
+          type: string
+          nullable: true
+          description: Fecha de fin de inhabilitacion (World Bank)
+          example: "2025-01-15"
+        grounds:
+          type: string
+          nullable: true
+          description: Motivos de inhabilitacion (World Bank)
+          example: Fraudulent practice
+        jurisdiction:
+          type: string
+          nullable: true
+          description: Jurisdiccion legal (ICIJ)
+        linkedTo:
+          type: string
+          nullable: true
+          description: Entidades vinculadas (ICIJ)
+        dataFrom:
+          type: string
+          nullable: true
+          description: Nombre del dataset de origen (ICIJ)
+          example: Panama Papers
+
+    ErrorResponse:
+      type: object
+      description: Formato de error estandar RFC 7807 con extensiones para codigos de error y errores por campo
+      properties:
+        type:
+          type: string
+          example: "https://tools.ietf.org/html/rfc7807"
+        title:
+          type: string
+          example: Validation Failed
+        status:
+          type: integer
+          example: 400
+        instance:
+          type: string
+        errorNumber:
+          type: integer
+          description: Codigo numerico del error (ver ErrorCodes.cs)
+          example: 1000
+        errorCode:
+          type: string
+          description: Codigo legible por maquina del error
+          example: VALIDATION_FAILED
+        message:
+          type: string
+          example: One or more validation errors occurred.
+        timestamp:
+          type: string
+          format: date-time
+        fieldErrors:
+          type: array
+          nullable: true
+          description: Errores de validacion por campo (solo presente en errores 400 de validacion)
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+                example: Term
+              message:
+                type: string
+                example: "Query parameter 'q' is required."
+              rejectedValue:
+                example: ""
+
+  responses:
+    Unauthorized:
+      description: Token JWT ausente, invalido o expirado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: Unauthorized
+
+    TooManyRequests:
+      description: Rate limit excedido (20 req/min por IP para endpoints de listas)
+      headers:
+        Retry-After:
+          description: Segundos hasta que se pueda reintentar
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            title: Rate limit exceeded
+            status: 429
+            instance: /api/lists/search
+            errorNumber: 7000
+            errorCode: RATE_LIMIT_EXCEEDED
+            message: "Too many requests. Please retry after 60 seconds."

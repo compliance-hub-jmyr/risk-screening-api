@@ -27,6 +27,7 @@ public static class WebApplicationExtensions
             options.SwaggerEndpoint("/swagger/all/swagger.json", "All APIs");
             options.SwaggerEndpoint("/swagger/iam/swagger.json", "IAM Module");
             options.SwaggerEndpoint("/swagger/suppliers/swagger.json", "Suppliers Module");
+            options.SwaggerEndpoint("/swagger/lists/swagger.json", "Lists Module");
         });
     }
 

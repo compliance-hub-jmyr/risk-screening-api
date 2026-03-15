@@ -1,7 +1,7 @@
 # User Stories — Scraping Module
 
 > **Format:** Title / Description / Deliverable / Dependencies / Acceptance Criteria (BDD Given/When/Then).
-> **Task tags:** `[BE-DOMAIN]` `[BE-APP]` `[BE-INFRA]` `[BE-INTERFACES]` `[BE-DB]` `[BE-TEST]` `[DOCS]`
+> **Task tags:** `[BE-DOMAIN]` `[BE-APP]` `[BE-INFRA]` `[BE-INTERFACES]` `[BE-TEST]` `[DOCS]`
 >
 > **Module nature:** The Scraping module is **stateless** — no database tables, no EF Core entities. All data is fetched live from external sources and optionally cached in `IMemoryCache`. There is no `TS-SCR-000` bootstrap story because the module only requires HTTP clients and cache registration.
 
@@ -19,17 +19,25 @@
 As a compliance officer, I want to search the OFAC Specially Designated Nationals (SDN) list by name, so that I can quickly check whether a person or entity appears on US Treasury sanctions.
 
 **Deliverable:**
-Endpoint `GET /api/lists/ofac?q={term}` that downloads the SDN XML feed, filters entries whose name contains the term (case-insensitive), and returns a `ScrapingResponse` with the match count and matching entries. Results are cached for 10 minutes per term.
+Endpoint `GET /api/lists/search?q={term}&sources=ofac` that performs real web scraping of the OFAC Sanctions List Search website by:
+1. Fetching the initial ASP.NET form page to extract ViewState and form fields
+2. Submitting a POST request with the search term
+3. Parsing the HTML results table to extract Name, Address, Type, List, Programs, and **Score** (match confidence percentage)
+Results are cached for 10 minutes per term.
+
+**Technical Note:**
+The OFAC SDN XML feed (`https://www.treasury.gov/ofac/downloads/sdn.xml`) does not include the **Score** field required by the technical assessment. The Score (match confidence percentage) is only available through the web search interface at `https://sanctionssearch.ofac.treas.gov/`, which requires form submission and HTML parsing. This implementation uses `HtmlAgilityPack` for robust HTML parsing and handles ASP.NET ViewState management.
 
 **Dependencies:**
 - `US-IAM-001`: JWT authentication
-- `ScrapingModuleExtensions.AddScrapingModule()` registered — HTTP client and `IMemoryCache` configured
+- `ScrapingModuleExtensions.AddScrapingModule()` registered — HTTP client with 45s timeout and `IMemoryCache` configured
+- `HtmlAgilityPack` 1.11.71 for HTML parsing
 
-**Priority:** High | **Estimate:** 3 SP | **Status:** Updated (v0.5.1)
+**Priority:** High | **Estimate:** 5 SP | **Status:** Updated (v0.6.0 - Web Scraping + Ports & Adapters)
 
 #### Tasks
 
-- `[BE-DOMAIN]` `RiskEntry` record — unified type for all three sources:
+- `[BE-DOMAIN]` `RiskEntry` record (`Domain/Model/ValueObjects/`) — unified type for all three sources:
   - `ListSource` string NOT NULL — source discriminator (`"OFAC"`, `"WORLD_BANK"`, `"ICIJ"`)
   - `Name` string? — entity name (OFAC name, World Bank firm name, ICIJ caption)
   - `Address` string? — physical address (OFAC, World Bank)
@@ -45,29 +53,34 @@ Endpoint `GET /api/lists/ofac?q={term}` that downloads the SDN XML feed, filters
   - `LinkedTo` string? — linked entities (ICIJ)
   - `DataFrom` string? — source dataset name (ICIJ)
   - Fields not applicable to a source are left as `null`
-- `[BE-DOMAIN]` `SearchResult` record with `Hits`, `Entries` (IReadOnlyList<RiskEntry>), static `Empty`, and factory `Merge`
-- `[BE-INFRA]` `IScrapingSource` interface with `SourceName` and `SearchAsync(term, ct)`
-- `[BE-INFRA]` `OfacScrapingSource` — downloads SDN ZIP from `https://sdn.ofac.treas.gov/SDN_XML.zip`, decompresses in memory, parses XML with `XDocument`, case-insensitive name match; maps to `RiskEntry` with `ListSource = "OFAC"`, `Name`, `Address`, `Type`, `List`, `Programs`, `Score`; returns `SearchResult.Empty` on any failure
-- `[BE-INFRA]` `ScrapingOrchestrationService.SearchSourceAsync("ofac", term)` — caches by `scraping:ofac:{term}` for 10 min
-- `[BE-INTERFACES]` `ListsController.SearchOfac` — requires `q`; dispatches to `SearchSourceAsync`; subject to rate limiting (20 req/min per IP)
-- `[BE-TEST]` Unit test: matching entries returned with all OFAC fields, no matches returns empty, missing `q` returns 400
+- `[BE-DOMAIN]` `SearchResult` record (`Domain/Model/ValueObjects/`) with `Hits`, `Entries` (IReadOnlyList<RiskEntry>), static `Empty`, and factory `Merge`
+- `[BE-DOMAIN]` `SearchRiskListsQuery` record (`Domain/Model/Queries/`) — CQRS query implementing `IRequest<SearchResult>` with `Term` and optional `SourceNames` filter
+- `[BE-APP]` `IScrapingSource` port (`Application/Ports/`) — interface with `SourceName` and `SearchAsync(term, ct)` — defines the contract for scraping source adapters
+- `[BE-APP]` `SearchRiskListsQueryHandler` (`Application/Search/`) — MediatR `IRequestHandler<SearchRiskListsQuery, SearchResult>` that orchestrates source calls with `IMemoryCache` caching and parallel execution via `Task.WhenAll`
+- `[BE-INFRA]` `OfacScrapingSource` (`Infrastructure/Sources/`) — adapter implementing `IScrapingSource`; orchestrates the GET → POST HTTP flow against `https://sanctionssearch.ofac.treas.gov/`
+- `[BE-INFRA]` `OfacHtmlParser` (`Infrastructure/Sources/`) — static helper that extracts ASP.NET form data from the initial page and parses the HTML results table into `RiskEntry` records
+- `[BE-APP]` `SearchRiskListsQueryValidator` (`Application/Search/`) — FluentValidation validator auto-executed by `ValidationPipelineBehavior`; validates `q` is not empty and each `sources` value is whitelisted (ofac, worldbank, icij)
+- `[BE-INTERFACES]` `ListsController.Search` — thin controller: creates `SearchRiskListsQuery`, dispatches via MediatR, maps response with `ScrapingResponseMapper`; validation handled by `ValidationPipelineBehavior`
+- `[BE-TEST]` `OfacScrapingSourceTests` (16 tests) — uses `OfacHtmlMother` for HTML fixtures and `FakeHttpMessageHandler` for HTTP simulation
+- `[BE-TEST]` `SearchRiskListsQueryHandlerTests` (10 tests) — uses `SearchResultMother` and `RiskEntryMother` for test data; covers source selection, caching, and result merging
+- `[BE-TEST]` `SearchResultTests` (5 tests) — `Empty`, `Merge` factory behavior
 
 #### Acceptance Criteria
 
 **Scenario 1: Matches found**
 - Given I am authenticated
-- And I send `GET /api/lists/ofac?q=john doe`
+- And I send `GET /api/lists/search?q=john doe&sources=ofac`
 - When the request is processed
 - Then I receive HTTP 200 with `{ hits: N, entries: [...] }`
-- And each entry includes `listSource = "OFAC"`, `name`, `address`, `type`, `list`, `programs`, `score`
+- And each entry includes `listSource = "OFAC"`, `name`, `address`, `type`, `list`, `programs`, **`score` (double)**
 
 **Scenario 2: No matches**
 - Given the search term does not appear in the OFAC SDN list
-- When I send `GET /api/lists/ofac?q=unknown entity xyz`
+- When I send `GET /api/lists/search?q=unknown entity xyz&sources=ofac`
 - Then I receive HTTP 200 with `{ hits: 0, entries: [] }`
 
 **Scenario 3: Missing search term**
-- Given I send `GET /api/lists/ofac` without the `q` parameter
+- Given I send `GET /api/lists/search?sources=ofac` without the `q` parameter
 - When the request reaches the controller
 - Then I receive HTTP 400 Bad Request
 
@@ -77,13 +90,13 @@ Endpoint `GET /api/lists/ofac?q={term}` that downloads the SDN XML feed, filters
 - Then I receive HTTP 429 Too Many Requests
 
 **Scenario 5: OFAC source unavailable**
-- Given the OFAC ZIP endpoint is unreachable
+- Given the OFAC website is unreachable
 - When I send the request
 - Then I receive HTTP 200 with `{ hits: 0, entries: [] }` (fault-tolerant — `SearchResult.Empty` returned)
 
 **Scenario 6: Cache hit**
 - Given a previous request for the same term was made within the last 10 minutes
-- When I send `GET /api/lists/ofac?q=john doe` again
+- When I send `GET /api/lists/search?q=john doe&sources=ofac` again
 - Then I receive HTTP 200 with the cached result (no external HTTP call made)
 
 ---
@@ -96,32 +109,32 @@ Endpoint `GET /api/lists/ofac?q={term}` that downloads the SDN XML feed, filters
 As a compliance officer, I want to search the World Bank's list of debarred and cross-debarred firms, so that I can identify suppliers that have been sanctioned from participating in World Bank-funded projects.
 
 **Deliverable:**
-Endpoint `GET /api/lists/worldbank?q={term}` that scrapes the World Bank HTML page using `HtmlAgilityPack`, extracts matching table rows, and returns a `ScrapingResponse`. Results are cached for 10 minutes per term.
+Endpoint `GET /api/lists/search?q={term}&sources=worldbank` that scrapes the World Bank HTML page using `HtmlAgilityPack`, extracts matching table rows, and returns a `ScrapingResponse`. Results are cached for 10 minutes per term.
 
 **Dependencies:**
 - `US-SCR-001` (same infrastructure, same pattern)
 
-**Priority:** High | **Estimate:** 3 SP | **Status:** Updated (v0.5.1)
+**Priority:** High | **Estimate:** 3 SP | **Status:** Updated (v0.6.0)
 
 #### Tasks
 
-- `[BE-INFRA]` `WorldBankScrapingSource` — fetches `https://projects.worldbank.org/en/projects-operations/procurement/debarred-firms?srchTerm={term}`, parses HTML table with `HtmlAgilityPack`, extracts firm name (mapped to `Name`), `Address`, `Country`, `FromDate`, `ToDate`, `Grounds`; maps to `RiskEntry` with `ListSource = "WORLD_BANK"`; returns `SearchResult.Empty` on failure
-- `[BE-INFRA]` `ScrapingOrchestrationService.SearchSourceAsync("worldbank", term)` — caches by `scraping:worldbank:{term}` for 10 min
-- `[BE-INTERFACES]` `ListsController.SearchWorldBank` — requires `q`; subject to rate limiting
+- `[BE-INFRA]` `WorldBankScrapingSource` — adapter implementing `IScrapingSource`; fetches `https://projects.worldbank.org/en/projects-operations/procurement/debarred-firms?srchTerm={term}`, parses HTML table with `HtmlAgilityPack`, extracts firm name (mapped to `Name`), `Address`, `Country`, `FromDate`, `ToDate`, `Grounds`; maps to `RiskEntry` with `ListSource = "WORLD_BANK"`; returns `SearchResult.Empty` on failure
+- `[BE-APP]` `SearchRiskListsQueryHandler` caches result by `scraping:worldbank:{term}` for 10 min (shared handler — no per-source orchestrator needed)
+- `[BE-INTERFACES]` `ListsController.Search` with `sources=worldbank` — requires `q`; subject to rate limiting
 - `[BE-TEST]` Unit test: matching rows returned with all World Bank fields, HTML parse failure returns empty
 
 #### Acceptance Criteria
 
 **Scenario 1: Matches found**
 - Given I am authenticated
-- And I send `GET /api/lists/worldbank?q=acme corp`
+- And I send `GET /api/lists/search?q=acme corp&sources=worldbank`
 - When the request is processed
 - Then I receive HTTP 200 with `{ hits: N, entries: [...] }`
 - And each entry includes `listSource = "WORLD_BANK"`, `name`, `address`, `country`, `fromDate`, `toDate`, `grounds`
 
 **Scenario 2: No matches**
 - Given the search term does not appear in the World Bank debarred firms table
-- When I send `GET /api/lists/worldbank?q=unknown entity xyz`
+- When I send `GET /api/lists/search?q=unknown entity xyz&sources=worldbank`
 - Then I receive HTTP 200 with `{ hits: 0, entries: [] }`
 
 **Scenario 3: World Bank source unavailable**
@@ -144,30 +157,30 @@ Endpoint `GET /api/lists/worldbank?q={term}` that scrapes the World Bank HTML pa
 As a compliance officer, I want to search the ICIJ Offshore Leaks database, so that I can identify suppliers linked to offshore entities named in the Panama Papers, Paradise Papers, or similar investigations.
 
 **Deliverable:**
-Endpoint `GET /api/lists/icij?q={term}` that queries the ICIJ public JSON API, deserializes the `nodes` array, and returns a `ScrapingResponse`. Results are cached for 10 minutes per term.
+Endpoint `GET /api/lists/search?q={term}&sources=icij` that queries the ICIJ public JSON API, deserializes the `nodes` array, and returns a `ScrapingResponse`. Results are cached for 10 minutes per term.
 
 **Dependencies:**
 - `US-SCR-001` (same infrastructure, same pattern)
 
-**Priority:** High | **Estimate:** 2 SP | **Status:** Updated (v0.5.1)
+**Priority:** High | **Estimate:** 2 SP | **Status:** Updated (v0.6.0)
 
 #### Tasks
 
-- `[BE-INFRA]` `IcijScrapingSource` — fetches `https://offshoreleaks.icij.org/api/nodes?q={term}`, deserializes `nodes` array with `System.Text.Json` into internal `IcijNode` DTOs; maps to `RiskEntry` with:
+- `[BE-INFRA]` `IcijScrapingSource` — adapter implementing `IScrapingSource`; fetches `https://offshoreleaks.icij.org/api/nodes?q={term}`, deserializes `nodes` array with `System.Text.Json` into internal `IcijNode` DTOs; maps to `RiskEntry` with:
   - `ListSource = "ICIJ"`
   - `Name` (node caption, fallback to name field)
   - `Jurisdiction`, `LinkedTo`, `DataFrom`
   - All OFAC/World Bank fields remain `null`
   - Returns `SearchResult.Empty` on failure
-- `[BE-INFRA]` `ScrapingOrchestrationService.SearchSourceAsync("icij", term)` — caches by `scraping:icij:{term}` for 10 min
-- `[BE-INTERFACES]` `ListsController.SearchIcij` — requires `q`; subject to rate limiting
+- `[BE-APP]` `SearchRiskListsQueryHandler` caches result by `scraping:icij:{term}` for 10 min (shared handler)
+- `[BE-INTERFACES]` `ListsController.Search` with `sources=icij` — requires `q`; subject to rate limiting
 - `[BE-TEST]` Unit test: nodes deserialized correctly with `name` field, empty `nodes` array returns empty
 
 #### Acceptance Criteria
 
 **Scenario 1: Matches found**
 - Given I am authenticated
-- And I send `GET /api/lists/icij?q=mossack fonseca`
+- And I send `GET /api/lists/search?q=mossack fonseca&sources=icij`
 - When the request is processed
 - Then I receive HTTP 200 with `{ hits: N, entries: [...] }`
 - And each entry includes `listSource = "ICIJ"`, `name`, `jurisdiction`, `linkedTo`, `dataFrom`
@@ -197,25 +210,26 @@ Endpoint `GET /api/lists/icij?q={term}` that queries the ICIJ public JSON API, d
 As a compliance officer, I want to search all three risk lists with a single request, so that I get a consolidated view of risk across all sources without making three separate API calls.
 
 **Deliverable:**
-Endpoint `GET /api/lists/all?q={term}` that executes all three source queries in parallel via `Task.WhenAll`, merges results with `SearchResult.Merge`, and returns a single `ScrapingResponse` with the total `hits` and unified entry list. Each per-source result is cached independently.
+Endpoint `GET /api/lists/search?q={term}` (no `sources` parameter, or `sources=ofac,worldbank,icij`) that executes all three source queries in parallel via `Task.WhenAll`, merges results with `SearchResult.Merge`, and returns a single `ScrapingResponse` with the total `hits` and unified entry list. Each per-source result is cached independently. The `sources` query parameter accepts a comma-separated subset to query specific sources only; when omitted, all registered sources are queried.
 
 **Dependencies:**
 - `US-SCR-001`, `US-SCR-002`, `US-SCR-003`
 
-**Priority:** Critical | **Estimate:** 2 SP | **Status:** Implemented (v0.5.0)
+**Priority:** Critical | **Estimate:** 2 SP | **Status:** Updated (v0.6.0 - CQRS Handler)
 
 #### Tasks
 
-- `[BE-INFRA]` `ScrapingOrchestrationService.SearchAllAsync(term)` — calls all registered `IScrapingSource` instances in parallel via `Task.WhenAll`, merges with `SearchResult.Merge(results)`
+- `[BE-APP]` `SearchRiskListsQueryHandler.Handle(SearchRiskListsQuery, CancellationToken)` — selects sources by `SourceNames` filter (or all if null/empty), calls `IScrapingSource` instances in parallel via `Task.WhenAll`, merges with `SearchResult.Merge(results)`, caches each source result independently
 - `[BE-DOMAIN]` `SearchResult.Merge(IEnumerable<SearchResult>)` — sums `Hits` and concatenates `Entries` lists from all sources; no deduplication (an entity present in multiple lists is counted multiple times — known limitation)
-- `[BE-INTERFACES]` `ListsController.SearchAll` — requires `q`; delegates to `SearchAllAsync`; subject to rate limiting
+- `[BE-APP]` `SearchRiskListsQueryValidator` — FluentValidation rules: `Term` not empty, each `SourceNames` value in whitelist; auto-executed by `ValidationPipelineBehavior` before handler
+- `[BE-INTERFACES]` `ListsController.Search` — thin controller: creates `SearchRiskListsQuery(q, sources)`, dispatches via `IMediator`, maps response with `ScrapingResponseMapper`; subject to rate limiting
 - `[BE-TEST]` Unit test: results from all three sources merged correctly; one source failing does not prevent the other two from returning results
 
 #### Acceptance Criteria
 
 **Scenario 1: Matches across multiple sources**
 - Given I am authenticated
-- And I send `GET /api/lists/all?q=global corp`
+- And I send `GET /api/lists/search?q=global corp` (no `sources` parameter — queries all)
 - When the request is processed
 - Then I receive HTTP 200 with `{ hits: N, entries: [...] }`
 - And `hits` equals the sum of individual source hit counts
@@ -255,21 +269,22 @@ Endpoint `GET /api/lists/all?q={term}` that executes all three source queries in
 **Title:** HTTP clients, caching, rate limiting, and DI registration
 
 **Description:**
-As a developer, I need to configure the scraping module's infrastructure — typed HTTP clients with timeout and User-Agent headers, in-memory caching, IP-based rate limiting, and DI registration of the orchestration service — so that all scraping user stories have a reliable, protected foundation.
+As a developer, I need to configure the scraping module's infrastructure — typed HTTP clients with timeout and User-Agent headers, in-memory caching, IP-based rate limiting, and DI registration of scraping sources and MediatR handlers — so that all scraping user stories have a reliable, protected foundation.
 
 **Deliverable:**
-`ScrapingModuleExtensions.AddScrapingModule()` registers HTTP clients and cache. Rate limiting moved to shared infrastructure (`AddRateLimiting()` / `UseRateLimiting()`) since it protects endpoints across all modules. `RateLimitResponseMiddleware` rewrites 429 responses to standard `ErrorResponse` format.
+`ScrapingModuleExtensions.AddScrapingModule()` registers HTTP clients, `IMemoryCache`, and `IScrapingSource` adapter implementations. The `SearchRiskListsQueryHandler` is auto-discovered by MediatR assembly scanning — no explicit registration needed. Rate limiting moved to shared infrastructure (`AddRateLimiting()` / `UseRateLimiting()`) since it protects endpoints across all modules. `RateLimitResponseMiddleware` rewrites 429 responses to standard `ErrorResponse` format.
 
 **Dependencies:**
 - None — no IAM dependency; the module registers its own services independently
 
-**Priority:** Critical | **Estimate:** 2 SP | **Status:** Implemented (v0.5.0)
+**Priority:** Critical | **Estimate:** 2 SP | **Status:** Updated (v0.6.0 - Ports & Adapters)
 
 #### Tasks
 
 - `[BE-INFRA]` Three typed `HttpClient` registrations — each with `Timeout` and `User-Agent` header configured for its target source
 - `[BE-INFRA]` `IMemoryCache` registration (if not already registered by Shared)
-- `[BE-INFRA]` `ScrapingOrchestrationService` registered as scoped; receives `IEnumerable<IScrapingSource>` (all three sources injected via DI)
+- `[BE-INFRA]` `IScrapingSource` adapter implementations registered as scoped (`OfacScrapingSource`, future: `WorldBankScrapingSource`, `IcijScrapingSource`)
+- `[BE-APP]` `SearchRiskListsQueryHandler` auto-discovered by MediatR assembly scanning; receives `IEnumerable<IScrapingSource>` (all sources injected via DI) and `IMemoryCache`
 - `[BE-INFRA]` `AspNetCoreRateLimit` IP-based rate limiting with tiered rules (moved to shared infrastructure): `POST /api/authentication/sign-in` (5 req/min — brute-force protection), `GET /api/lists/*` (20 req/min — external source protection), `*:/api/*` (100 req/min — general fallback)
 - `[BE-INFRA]` `RateLimitResponseMiddleware` — intercepts 429 responses and rewrites to standard `ErrorResponse` (RFC 7807) with `RATE_LIMIT_EXCEEDED` error code (7000)
 - `[BE-INFRA]` `UseRateLimiting(app)` adds `app.UseIpRateLimiting()` middleware (shared infrastructure)
@@ -279,8 +294,8 @@ As a developer, I need to configure the scraping module's infrastructure — typ
 
 - Given the application starts
 - When `AddScrapingModule()`, `AddRateLimiting()` and `UseRateLimiting()` are called
-- Then all three `IScrapingSource` implementations are resolvable from DI
-- And `ScrapingOrchestrationService` is resolvable and receives all three sources
+- Then all `IScrapingSource` adapter implementations are resolvable from DI
+- And `SearchRiskListsQueryHandler` is resolvable and receives all sources via `IEnumerable<IScrapingSource>`
 - And the rate limiter is active with tiered rules: sign-in (5/min), lists (20/min), general API (100/min)
 - And requests that exceed the limit receive HTTP 429 in `ErrorResponse` format with `errorCode: "RATE_LIMIT_EXCEEDED"` and `Retry-After` header
 
@@ -294,11 +309,11 @@ Store `SearchResult` records in a dedicated `scraping_results` table for auditin
 
 ### US-SCR-006: Configurable cache TTL *(deferred)*
 
-Expose the cache TTL as a configurable value in `appsettings.json`. Currently hardcoded to 10 minutes in `ScrapingOrchestrationService`.
+Expose the cache TTL as a configurable value in `appsettings.json`. Currently hardcoded to 10 minutes in `SearchRiskListsQueryHandler`.
 
 ### US-SCR-007: Additional risk list sources *(deferred)*
 
-Integrate additional sources (EU Sanctions, UN Security Council, INTERPOL). The `IScrapingSource` interface is designed to accommodate new sources without changes to the orchestrator or controller.
+Integrate additional sources (EU Sanctions, UN Security Council, INTERPOL). The `IScrapingSource` port interface is designed to accommodate new adapter implementations without changes to the handler or controller.
 
 ---
 
@@ -306,18 +321,22 @@ Integrate additional sources (EU Sanctions, UN Security Council, INTERPOL). The 
 
 | Aspect | Implementation |
 |--------|---------------|
+| Architecture | Ports & Adapters (Hexagonal): `IScrapingSource` port in `Application/Ports/`, adapter implementations in `Infrastructure/Sources/`, CQRS query handler in `Application/Search/` |
 | Stateless design | No SQL tables; no EF Core entities. All data lives in HTTP responses and `IMemoryCache` |
-| `RiskEntry` shape | Unified type for all three sources; `ListSource` discriminates origin; inapplicable fields are `null` |
+| `RiskEntry` shape | Unified record in `Domain/Model/ValueObjects/`; `ListSource` discriminates origin; inapplicable fields are `null` |
 | OFAC fields | `listSource`, `name`, `address`, `type`, `list`, `programs` (string[]), `score` (double?) |
 | World Bank fields | `listSource`, `name` (firm name), `address`, `country`, `fromDate`, `toDate`, `grounds` |
 | ICIJ fields | `listSource`, `name` (node caption), `jurisdiction`, `linkedTo`, `dataFrom` |
+| CQRS pattern | `SearchRiskListsQuery` → `SearchRiskListsQueryHandler` via MediatR (same pattern as IAM and Suppliers modules) |
 | Cache key format | `scraping:{SOURCE}:{term}` — per source, per term; TTL 10 minutes |
-| Fault tolerance | Each `IScrapingSource` wraps its implementation in try/catch and returns `SearchResult.Empty` on any error — the orchestrator never propagates source-level exceptions |
+| Fault tolerance | Each `IScrapingSource` adapter wraps its implementation in try/catch and returns `SearchResult.Empty` on any error — the handler never propagates source-level exceptions |
 | Rate limiting | IP-based via `AspNetCoreRateLimit` (shared infrastructure) with tiered rules: sign-in (5/min), lists (20/min), general API (100/min). `RateLimitResponseMiddleware` rewrites 429 to standard `ErrorResponse` with `RATE_LIMIT_EXCEEDED` (7000) and `Retry-After` header |
-| Parallel execution | `SearchAllAsync` uses `Task.WhenAll` — all three sources queried concurrently; total latency = slowest source, not the sum |
-| OFAC parsing | Downloads and decompresses the full SDN ZIP in memory on each cache miss; no disk writes |
+| Unified endpoint | Single `GET /api/lists/search?q={term}&sources=ofac&sources=worldbank` — the `sources` parameter is optional (repeated query params: ofac, worldbank, icij); when omitted, all sources are queried. `SearchRiskListsQueryValidator` (FluentValidation) validates input before the handler executes |
+| Parallel execution | `SearchRiskListsQueryHandler` uses `Task.WhenAll` — all selected sources queried concurrently; total latency = slowest source, not the sum |
+| OFAC scraping | `OfacScrapingSource` orchestrates GET → POST flow; `OfacHtmlParser` extracts form data and parses HTML results table with `HtmlAgilityPack` |
 | World Bank parsing | `HtmlAgilityPack` for robust HTML table parsing |
 | ICIJ integration | REST JSON API; deserialization with `System.Text.Json`; entity caption mapped to `name` field |
 | No deduplication | `SearchResult.Merge` sums hits and concatenates entries; an entity present in multiple lists is counted multiple times — known v1.0 limitation |
-| Cross-module usage | `ScrapingOrchestrationService` is consumed directly by `RunScreeningCommandHandler` in the Suppliers module; the Scraping module has no dependency on Suppliers |
-| Implementation status | All US-SCR stories and TS-SCR-000 implemented in v0.5.0 |
+| Cross-module usage | `SearchRiskListsQueryHandler` is consumed via MediatR by `RunScreeningCommandHandler` in the Suppliers module; the Scraping module has no dependency on Suppliers |
+| Test infrastructure | Mother pattern: `RiskEntryMother`, `SearchResultMother`, `OfacHtmlMother`; `FakeHttpMessageHandler` for HTTP simulation |
+| Implementation status | All US-SCR stories and TS-SCR-000 implemented in v0.6.0 |

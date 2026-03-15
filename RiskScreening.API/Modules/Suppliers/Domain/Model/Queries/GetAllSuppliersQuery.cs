@@ -18,5 +18,8 @@ public record GetAllSuppliersQuery(
     string? SortDirection = null
 ) : IRequest<PageResponse<Supplier>>
 {
-    public PageRequest ToPageRequest() => new(Page, Size, SortBy, SortDirection);
+    public PageRequest ToPageRequest()
+    {
+        return new PageRequest(Page, Size, SortBy, SortDirection);
+    }
 }

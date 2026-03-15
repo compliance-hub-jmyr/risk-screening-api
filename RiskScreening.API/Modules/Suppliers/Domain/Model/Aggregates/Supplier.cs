@@ -72,7 +72,7 @@ public class Supplier : AggregateRoot
         string? notes = null)
     {
         EnsureNotDeleted();
-        
+
         LegalName = new LegalName(legalName);
         CommercialName = new CommercialName(commercialName);
         TaxId = new TaxId(taxId);
