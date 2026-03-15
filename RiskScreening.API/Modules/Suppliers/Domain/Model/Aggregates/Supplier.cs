@@ -1,3 +1,4 @@
+using RiskScreening.API.Modules.Suppliers.Domain.Exceptions;
 using RiskScreening.API.Modules.Suppliers.Domain.Model.ValueObjects;
 using RiskScreening.API.Shared.Domain.Model.Aggregates;
 using RiskScreening.API.Shared.Domain.Model.ValueObjects;
@@ -56,5 +57,43 @@ public class Supplier : AggregateRoot
             RiskLevel = RiskLevel.None,
             IsDeleted = false
         };
+    }
+    
+    public void Delete()
+    {
+        if (IsDeleted) throw new SupplierAlreadyDeletedException(Id);
+        IsDeleted = true;
+    }
+
+    public void Approve()
+    {
+        EnsureNotDeleted();
+        Status = SupplierStatus.Approved;
+    }
+
+    public void Reject()
+    {
+        EnsureNotDeleted();
+        if (Status == SupplierStatus.Rejected)
+            throw new InvalidSupplierStateException(Id, "Supplier is already rejected.");
+        Status = SupplierStatus.Rejected;
+    }
+
+    public void MarkUnderReview()
+    {
+        EnsureNotDeleted();
+        Status = SupplierStatus.UnderReview;
+    }
+
+    public void ApplyScreeningResult(RiskLevel riskLevel)
+    {
+        RiskLevel = riskLevel;
+        if (riskLevel == RiskLevel.High)
+            Status = SupplierStatus.UnderReview;
+    }
+
+    private void EnsureNotDeleted()
+    {
+        if (IsDeleted) throw new SupplierAlreadyDeletedException(Id);
     }
 }

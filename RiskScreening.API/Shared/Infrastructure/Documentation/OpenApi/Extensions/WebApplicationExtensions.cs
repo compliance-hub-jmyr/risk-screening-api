@@ -10,8 +10,8 @@ public static class WebApplicationExtensions
     ///     Registers OpenAPI documentation middleware.
     ///     <list type="bullet">
     ///         <item>Native OpenAPI JSON at <c>/openapi/v1.json</c></item>
-    ///         <item>Swashbuckle JSON at <c>/swagger/v1/swagger.json</c></item>
-    ///         <item>Swagger UI at <c>/swagger</c></item>
+    ///         <item>Swashbuckle JSON at <c>/swagger/{group}/swagger.json</c></item>
+    ///         <item>Swagger UI at <c>/swagger</c> with group dropdown</item>
     ///     </list>
     /// </summary>
     /// <remarks>
@@ -22,7 +22,12 @@ public static class WebApplicationExtensions
     {
         app.MapOpenApi();
         app.UseSwagger();
-        app.UseSwaggerUI();
+        app.UseSwaggerUI(options =>
+        {
+            options.SwaggerEndpoint("/swagger/all/swagger.json", "All APIs");
+            options.SwaggerEndpoint("/swagger/iam/swagger.json", "IAM Module");
+            options.SwaggerEndpoint("/swagger/suppliers/swagger.json", "Suppliers Module");
+        });
     }
 
     /// <summary>

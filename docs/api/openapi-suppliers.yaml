@@ -1,0 +1,422 @@
+openapi: 3.1.0
+info:
+  title: Risk Screening Platform — Suppliers Module
+  version: 1.0.0
+  description: |
+    API de gestion de proveedores para la plataforma Risk Screening.
+
+    ## Autenticacion
+    Todos los endpoints requieren un JWT Bearer token obtenido via `POST /api/authentication/sign-in`.
+
+    ## Paginacion
+    El endpoint `GET /api/suppliers` soporta paginacion con los query params `page` (0-based) y `size` (default 20, max 100).
+
+    ## Ordenamiento
+    Campos permitidos: `legalName`, `commercialName`, `taxId`, `country`, `status`, `riskLevel`, `createdAt`, `updatedAt`.
+    Direccion: `ASC` o `DESC` (default: `updatedAt DESC`).
+
+    ## Filtros
+    Todos los filtros son opcionales y se combinan con AND. Valores nulos o vacios se ignoran.
+  contact:
+    name: EY Technical Assessment
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:5215
+    description: Local Development (dotnet run)
+
+security:
+  - BearerAuth: []
+
+tags:
+  - name: Suppliers
+    description: CRUD y gestion del ciclo de vida de proveedores
+
+paths:
+  /api/suppliers:
+    post:
+      summary: Crear proveedor
+      description: |
+        Crea un nuevo proveedor en estado `Pending` con nivel de riesgo `None`.
+
+        **Errores posibles:**
+        - 400: Campos faltantes, formato invalido (email, telefono, URL, TaxId, etc.)
+        - 409: TaxId ya existe en el sistema
+      tags: [Suppliers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSupplierRequest'
+            example:
+              legalName: Acme Soluciones S.A.C.
+              commercialName: Acme
+              taxId: "20512345678"
+              country: PE
+              contactPhone: "+51 999 888 777"
+              contactEmail: contacto@acme.pe
+              website: https://acme.pe
+              address: Av. Javier Prado 1234, Lima
+              annualBillingUsd: 150000.50
+              notes: Proveedor referido por el area de compras
+      responses:
+        '201':
+          description: Proveedor creado exitosamente
+          headers:
+            Location:
+              description: URL del proveedor creado
+              schema:
+                type: string
+                format: uri
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupplierResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+    get:
+      summary: Listar proveedores
+      description: |
+        Retorna una lista paginada de proveedores activos (no eliminados).
+        Soporta filtros opcionales y ordenamiento configurable.
+      tags: [Suppliers]
+      parameters:
+        - name: legalName
+          in: query
+          description: Filtro por nombre legal (busqueda parcial LIKE)
+          schema:
+            type: string
+        - name: commercialName
+          in: query
+          description: Filtro por nombre comercial (busqueda parcial LIKE)
+          schema:
+            type: string
+        - name: taxId
+          in: query
+          description: Filtro por TaxId (busqueda exacta)
+          schema:
+            type: string
+        - name: country
+          in: query
+          description: Filtro por codigo de pais ISO 3166-1 alpha-2
+          schema:
+            type: string
+            example: PE
+        - name: status
+          in: query
+          description: Filtro por estado del proveedor
+          schema:
+            type: string
+            enum: [Pending, Approved, Rejected, UnderReview]
+        - name: riskLevel
+          in: query
+          description: Filtro por nivel de riesgo
+          schema:
+            type: string
+            enum: [None, Low, Medium, High, Critical]
+        - name: page
+          in: query
+          description: Numero de pagina (0-based, default 0)
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          description: Cantidad de elementos por pagina (default 20, max 100)
+          schema:
+            type: integer
+            default: 20
+        - name: sortBy
+          in: query
+          description: Campo por el cual ordenar
+          schema:
+            type: string
+            enum: [legalName, commercialName, taxId, country, status, riskLevel, createdAt, updatedAt]
+            default: updatedAt
+        - name: sortDirection
+          in: query
+          description: Direccion de ordenamiento
+          schema:
+            type: string
+            enum: [ASC, DESC]
+            default: DESC
+      responses:
+        '200':
+          description: Lista paginada de proveedores
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedSupplierResponse'
+              example:
+                content:
+                  - id: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+                    legalName: Acme Soluciones S.A.C.
+                    commercialName: Acme
+                    taxId: "20512345678"
+                    contactPhone: "+51 999 888 777"
+                    contactEmail: contacto@acme.pe
+                    website: https://acme.pe
+                    address: Av. Javier Prado 1234, Lima
+                    country: PE
+                    annualBillingUsd: 150000.50
+                    riskLevel: None
+                    status: Pending
+                    isDeleted: false
+                    notes: null
+                    createdAt: "2026-03-15T00:00:00Z"
+                    updatedAt: "2026-03-15T00:00:00Z"
+                    createdBy: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+                    updatedBy: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+                meta:
+                  number: 0
+                  size: 20
+                  totalElements: 1
+                  totalPages: 1
+                  first: true
+                  last: true
+                  hasNext: false
+                  hasPrevious: false
+
+  /api/suppliers/{id}:
+    get:
+      summary: Obtener proveedor por ID
+      description: |
+        Retorna los datos de un proveedor especifico.
+
+        **Errores posibles:**
+        - 404: Proveedor no encontrado o eliminado
+      tags: [Suppliers]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID del proveedor (UUID)
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Proveedor encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupplierResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtenido via POST /api/authentication/sign-in
+
+  schemas:
+    CreateSupplierRequest:
+      type: object
+      required: [legalName, commercialName, taxId, country]
+      properties:
+        legalName:
+          type: string
+          description: Razon social del proveedor (max 200 caracteres)
+        commercialName:
+          type: string
+          description: Nombre comercial del proveedor (max 200 caracteres)
+        taxId:
+          type: string
+          description: Numero de identificacion tributaria (11 digitos, ej. RUC peruano)
+          pattern: '^\d{11}$'
+        country:
+          type: string
+          description: Codigo de pais ISO 3166-1 alpha-2
+          example: PE
+        contactPhone:
+          type: string
+          nullable: true
+          description: Telefono de contacto principal
+          example: "+51 999 888 777"
+        contactEmail:
+          type: string
+          format: email
+          nullable: true
+          description: Email de contacto principal
+        website:
+          type: string
+          format: uri
+          nullable: true
+          description: URL del sitio web del proveedor
+        address:
+          type: string
+          nullable: true
+          description: Direccion fisica o postal (max 500 caracteres)
+        annualBillingUsd:
+          type: number
+          format: decimal
+          nullable: true
+          description: Facturacion anual en USD (max 2 decimales, >= 0)
+          example: 150000.50
+        notes:
+          type: string
+          nullable: true
+          description: Notas adicionales sobre el proveedor
+
+    SupplierResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Identificador unico del proveedor
+        legalName:
+          type: string
+          description: Razon social
+        commercialName:
+          type: string
+          description: Nombre comercial
+        taxId:
+          type: string
+          description: Numero de identificacion tributaria
+        contactPhone:
+          type: string
+          nullable: true
+          description: Telefono de contacto
+        contactEmail:
+          type: string
+          format: email
+          nullable: true
+          description: Email de contacto
+        website:
+          type: string
+          format: uri
+          nullable: true
+          description: Sitio web
+        address:
+          type: string
+          nullable: true
+          description: Direccion
+        country:
+          type: string
+          description: Codigo de pais ISO 3166-1 alpha-2
+        annualBillingUsd:
+          type: number
+          format: decimal
+          nullable: true
+          description: Facturacion anual en USD
+        riskLevel:
+          type: string
+          enum: [None, Low, Medium, High, Critical]
+          description: Nivel de riesgo calculado
+        status:
+          type: string
+          enum: [Pending, Approved, Rejected, UnderReview]
+          description: Estado del flujo de trabajo
+        isDeleted:
+          type: boolean
+          description: Indica si el proveedor fue eliminado (soft-delete)
+        notes:
+          type: string
+          nullable: true
+          description: Notas adicionales
+        createdAt:
+          type: string
+          format: date-time
+          description: Fecha de creacion
+        updatedAt:
+          type: string
+          format: date-time
+          description: Fecha de ultima actualizacion
+        createdBy:
+          type: string
+          format: uuid
+          nullable: true
+          description: ID del usuario que creo el proveedor
+        updatedBy:
+          type: string
+          format: uuid
+          nullable: true
+          description: ID del usuario que actualizo el proveedor por ultima vez
+
+    PagedSupplierResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/SupplierResponse'
+          description: Lista de proveedores en la pagina actual
+        meta:
+          $ref: '#/components/schemas/PageMetadata'
+
+    PageMetadata:
+      type: object
+      properties:
+        number:
+          type: integer
+          description: Numero de pagina actual (0-based)
+        size:
+          type: integer
+          description: Cantidad de elementos por pagina
+        totalElements:
+          type: integer
+          format: int64
+          description: Total de elementos que coinciden con los filtros
+        totalPages:
+          type: integer
+          description: Total de paginas
+        first:
+          type: boolean
+          description: Es la primera pagina
+        last:
+          type: boolean
+          description: Es la ultima pagina
+        hasNext:
+          type: boolean
+          description: Hay pagina siguiente
+        hasPrevious:
+          type: boolean
+          description: Hay pagina anterior
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        errors:
+          type: object
+          additionalProperties:
+            type: string
+          nullable: true
+
+  responses:
+    BadRequest:
+      description: Validacion fallida — campos faltantes o con formato incorrecto
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "Invalid TaxId '123': must be exactly 11 digits"
+
+    Conflict:
+      description: Conflicto de negocio — TaxId ya existe
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "Supplier with TaxId '20512345678' already exists"
+
+    NotFound:
+      description: Proveedor no encontrado o eliminado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "Supplier with Id '3fa85f64-5717-4562-b3fc-2c963f66afa6' was not found"

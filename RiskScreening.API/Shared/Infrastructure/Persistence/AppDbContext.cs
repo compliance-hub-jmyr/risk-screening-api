@@ -46,7 +46,7 @@ public class AppDbContext : DbContext
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         var now = DateTime.UtcNow;
-        var actor = _httpContextAccessor?.HttpContext?.User.FindFirstValue(ClaimTypes.Name);
+        var actor = _httpContextAccessor?.HttpContext?.User.FindFirstValue(ClaimTypes.NameIdentifier);
 
         foreach (var entry in ChangeTracker.Entries<IAuditableEntity>())
             switch (entry.State)

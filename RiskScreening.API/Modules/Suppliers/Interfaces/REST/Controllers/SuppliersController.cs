@@ -2,6 +2,7 @@ using Asp.Versioning;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using RiskScreening.API.Modules.Suppliers.Domain.Model.Queries;
 using RiskScreening.API.Modules.Suppliers.Interfaces.REST.Documentation;
 using RiskScreening.API.Modules.Suppliers.Interfaces.REST.Mappers.Request;
 using RiskScreening.API.Modules.Suppliers.Interfaces.REST.Mappers.Response;
@@ -9,6 +10,7 @@ using RiskScreening.API.Modules.Suppliers.Interfaces.REST.Resources.Requests;
 using RiskScreening.API.Modules.Suppliers.Interfaces.REST.Resources.Responses;
 using RiskScreening.API.Shared.Infrastructure.Configuration;
 using RiskScreening.API.Shared.Infrastructure.Documentation.OpenApi.Annotations;
+using RiskScreening.API.Shared.Interfaces.REST.Resources;
 
 namespace RiskScreening.API.Modules.Suppliers.Interfaces.REST.Controllers;
 
@@ -32,5 +34,26 @@ public class SuppliersController(IMediator mediator)
         var response = SupplierResponseMapper.ToResponse(supplier);
         // TODO: Change nameof(Create) to nameof(GetById) when the GetById method is implemented.
         return CreatedAtAction(nameof(Create), new { id = supplier.Id }, response);
+    }
+
+    /// <inheritdoc/>
+    [HttpGet]
+    [ProducesResponseType(typeof(PageResponse<SupplierResponse>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetAll(
+        [FromQuery] string? legalName,
+        [FromQuery] string? commercialName,
+        [FromQuery] string? taxId,
+        [FromQuery] string? country,
+        [FromQuery] string? status,
+        [FromQuery] string? riskLevel,
+        [FromQuery] int? page,
+        [FromQuery] int? size,
+        [FromQuery] string? sortBy,
+        [FromQuery] string? sortDirection,
+        CancellationToken ct)
+    {
+        var query = new GetAllSuppliersQuery(legalName, commercialName, taxId, country, status, riskLevel, page, size, sortBy, sortDirection);
+        var result = await mediator.Send(query, ct);
+        return Ok(SupplierResponseMapper.ToPageResponse(result));
     }
 }

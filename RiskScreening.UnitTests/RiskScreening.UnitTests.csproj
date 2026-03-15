@@ -30,6 +30,9 @@
         <!-- FluentValidation -->
         <PackageReference Include="FluentValidation" Version="12.1.1"/>
         <PackageReference Include="MediatR" Version="14.1.0"/>
+
+        <!-- Async IQueryable mocking for EF Core query handlers -->
+        <PackageReference Include="MockQueryable.NSubstitute" Version="7.0.1"/>
     </ItemGroup>
 
     <ItemGroup>
