@@ -16,3 +16,52 @@ Api-Version: 1
 Authorization: Bearer {{token}}
 
 ###
+
+### Create Supplier
+POST http://localhost:5215/api/suppliers
+Api-Version: 1
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "legalName": "Acme Soluciones S.A.C.",
+  "commercialName": "Acme",
+  "taxId": "20512345678",
+  "country": "PE",
+  "contactPhone": "+51 999 888 777",
+  "contactEmail": "contacto@acme.pe",
+  "website": "https://acme.pe",
+  "address": "Av. Javier Prado 1234, Lima",
+  "annualBillingUsd": 150000.50,
+  "notes": "Proveedor referido por el area de compras"
+}
+
+###
+
+### Get All Suppliers (default pagination)
+GET http://localhost:5215/api/suppliers
+Api-Version: 1
+Authorization: Bearer {{token}}
+
+###
+
+### Get All Suppliers (with filters and pagination)
+GET http://localhost:5215/api/suppliers?country=PE&status=Pending&page=0&size=10&sortBy=legalName&sortDirection=ASC
+Api-Version: 1
+Authorization: Bearer {{token}}
+
+###
+
+### Get All Suppliers (search by legal name)
+GET http://localhost:5215/api/suppliers?legalName=Acme
+Api-Version: 1
+Authorization: Bearer {{token}}
+
+###
+
+### Get Supplier by ID
+GET http://localhost:5215/api/suppliers/{{supplierId}}
+Api-Version: 1
+Authorization: Bearer {{token}}
+
+###
