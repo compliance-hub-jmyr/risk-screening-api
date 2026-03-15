@@ -12,6 +12,7 @@ namespace RiskScreening.API.Shared.Infrastructure.Persistence;
 public class AppDbContext : DbContext
 {
     private readonly IHttpContextAccessor? _httpContextAccessor;
+    private readonly TimeZoneInfo _timeZone;
 
     /// <summary>
     /// Initializes the context with the provided options and an optional HTTP context accessor.
@@ -19,10 +20,21 @@ public class AppDbContext : DbContext
     /// and <see cref="IAuditableEntity.UpdatedBy"/>. It is optional, so the context still works in migrations,
     /// seeders, and background jobs where no HTTP context is present.
     /// </summary>
-    public AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAccessor? httpContextAccessor = null)
+    /// <param name="options">EF Core options.</param>
+    /// <param name="configuration">App configuration — reads <c>App:TimeZone</c> (IANA id, e.g. "America/Lima"). Defaults to UTC.</param>
+    /// <param name="httpContextAccessor">Optional accessor for JWT claims.</param>
+    public AppDbContext(
+        DbContextOptions<AppDbContext> options,
+        IConfiguration? configuration = null,
+        IHttpContextAccessor? httpContextAccessor = null)
         : base(options)
     {
         _httpContextAccessor = httpContextAccessor;
+
+        var tzId = configuration?["App:TimeZone"];
+        _timeZone = string.IsNullOrWhiteSpace(tzId)
+            ? TimeZoneInfo.Utc
+            : TimeZoneInfo.FindSystemTimeZoneById(tzId);
     }
 
     /// <summary>
@@ -45,7 +57,7 @@ public class AppDbContext : DbContext
     /// </summary>
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
-        var now = DateTime.UtcNow;
+        var now = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, _timeZone);
         var actor = _httpContextAccessor?.HttpContext?.User.FindFirstValue(ClaimTypes.NameIdentifier);
 
         foreach (var entry in ChangeTracker.Entries<IAuditableEntity>())
