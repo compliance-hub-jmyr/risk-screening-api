@@ -84,6 +84,9 @@ if (app.Environment.IsDevelopment())
 // Applies the AllowAllPolicy registered by AddCorsPolicy()
 app.UseCorsPolicy();
 
+// Rewrites rate-limit 429 responses to standard ErrorResponse JSON format
+app.UseMiddleware<RateLimitResponseMiddleware>();
+
 // IP rate limiting — must run before auth (tiered: sign-in 5/min, lists 20/min, general 100/min)
 app.UseRateLimiting();
 
