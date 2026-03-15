@@ -17,7 +17,9 @@ namespace RiskScreening.UnitTests.Modules.IAM.Application;
 public class GetCurrentUserQueryHandlerTests
 {
     private readonly IUserRepository _userRepository = Substitute.For<IUserRepository>();
-    private readonly ILogger<GetCurrentUserQueryHandler> _logger = Substitute.For<ILogger<GetCurrentUserQueryHandler>>();
+
+    private readonly ILogger<GetCurrentUserQueryHandler>
+        _logger = Substitute.For<ILogger<GetCurrentUserQueryHandler>>();
 
     private readonly GetCurrentUserQueryHandler _sut;
 
