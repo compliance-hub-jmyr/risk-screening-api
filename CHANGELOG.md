@@ -43,7 +43,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 #### Scraping Module
 
-- `[SCR]` Three named `HttpClient` registrations via `IHttpClientFactory` (OFAC, World Bank, ICIJ) with timeout and User-Agent headers
+- `[SCR]` Two named `HttpClient` registrations via `IHttpClientFactory` (OFAC, World Bank) with timeout and User-Agent headers; ICIJ uses `Microsoft.Playwright` (headless Chromium) instead
 - `[SCR]` `IMemoryCache` registration for on-demand scraping result caching (10-min TTL per source per term)
 - `[SCR]` Domain model: `RiskEntry`, `SearchResult` value objects (`Domain/Model/ValueObjects/`), `SearchRiskListsQuery` CQRS query (`Domain/Model/Queries/`)
 - `[SCR]` `IScrapingSource` application port (`Application/Ports/`) — extensible interface for scraping source adapters
@@ -59,8 +59,10 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - `[SCR]` HTTP test file (`RiskScreening.API.http`) — search requests for all sources, individual sources, error cases
 - `[SCR]` `WorldBankScrapingSource` (`Infrastructure/Sources/`) — adapter for World Bank Debarred Firms; two-step web scraping: GET HTML page → extract API config from JavaScript → GET JSON API → filter and map
 - `[SCR]` `WorldBankHtmlParser` (`Infrastructure/Sources/`) — unified parser: `ExtractApiConfig()` scrapes `<script>` tags with `HtmlAgilityPack` to extract API URL + key; `ParseResults()` deserializes `response.ZPROCSUPP` JSON, filters firms by search term (multi-field OR logic across name, address, city, state, country, grounds), combines address components, maps "Ongoing"/"Permanent" ineligibility status to `toDate`
-- `[SCR]` Unit tests: `OfacScrapingSourceTests` (16 tests), `WorldBankScrapingSourceTests` (18 tests), `SearchRiskListsQueryHandlerTests` (10 tests), `SearchResultTests` (5 tests)
-- `[SCR]` Test infrastructure: `RiskEntryMother`, `SearchResultMother`, `OfacHtmlMother`, `WorldBankJsonMother`, `FakeHttpMessageHandler`
+- `[SCR]` `IcijScrapingSource` (`Infrastructure/Sources/`) — adapter for ICIJ Offshore Leaks; headless browser scraping via `Microsoft.Playwright` (Chromium) with anti-detection stealth flags to bypass CloudFront WAF; renders the JavaScript SPA and parses the HTML results table
+- `[SCR]` `IcijHtmlParser` (`Infrastructure/Sources/`) — parses ICIJ search results HTML (rendered by Playwright) with `HtmlAgilityPack`; extracts Entity (→ Name), Jurisdiction, Linked To (→ LinkedTo), Data From (→ DataFrom)
+- `[SCR]` Unit tests: `OfacScrapingSourceTests` (16 tests), `WorldBankScrapingSourceTests` (18 tests), `IcijScrapingSourceTests` (14 tests), `SearchRiskListsQueryHandlerTests` (10 tests), `SearchResultTests` (5 tests)
+- `[SCR]` Test infrastructure: `RiskEntryMother`, `SearchResultMother`, `OfacHtmlMother`, `WorldBankJsonMother`, `IcijHtmlMother`, `FakeHttpMessageHandler`
 
 #### Suppliers Module
 
