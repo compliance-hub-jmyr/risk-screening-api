@@ -74,5 +74,15 @@ public record SupplierResponse(
         Description = "Timestamp when the supplier was last updated.",
         Format = "date-time",
         Nullable = false)]
-    DateTime UpdatedAt
+    DateTime UpdatedAt,
+    [property: SwaggerSchema(
+        Description = "ID of the user who created the supplier.",
+        Format = "uuid",
+        Nullable = true)]
+    string? CreatedBy,
+    [property: SwaggerSchema(
+        Description = "ID of the user who last updated the supplier.",
+        Format = "uuid",
+        Nullable = true)]
+    string? UpdatedBy
 );

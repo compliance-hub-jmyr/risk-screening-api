@@ -170,6 +170,8 @@ paths:
                     notes: null
                     createdAt: "2026-03-15T00:00:00Z"
                     updatedAt: "2026-03-15T00:00:00Z"
+                    createdBy: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+                    updatedBy: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
                 meta:
                   number: 0
                   size: 20
@@ -329,6 +331,16 @@ components:
           type: string
           format: date-time
           description: Fecha de ultima actualizacion
+        createdBy:
+          type: string
+          format: uuid
+          nullable: true
+          description: ID del usuario que creo el proveedor
+        updatedBy:
+          type: string
+          format: uuid
+          nullable: true
+          description: ID del usuario que actualizo el proveedor por ultima vez
 
     PagedSupplierResponse:
       type: object

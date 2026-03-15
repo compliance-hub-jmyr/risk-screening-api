@@ -28,7 +28,9 @@ public static class SupplierResponseMapper
             supplier.IsDeleted,
             supplier.Notes,
             supplier.CreatedAt,
-            supplier.UpdatedAt);
+            supplier.UpdatedAt,
+            supplier.CreatedBy,
+            supplier.UpdatedBy);
     }
 
     /// <summary>Maps a paginated domain result to a paginated response DTO.</summary>

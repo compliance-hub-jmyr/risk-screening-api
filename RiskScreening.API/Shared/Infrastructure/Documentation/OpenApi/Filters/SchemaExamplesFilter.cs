@@ -79,6 +79,8 @@ public class SchemaExamplesFilter : ISchemaFilter
         SetExample(schema, "notes", "Proveedor referido por el area de compras");
         SetExample(schema, "createdAt", "2026-03-15T00:00:00Z");
         SetExample(schema, "updatedAt", "2026-03-15T00:00:00Z");
+        SetExample(schema, "createdBy", "3fa85f64-5717-4562-b3fc-2c963f66afa6");
+        SetExample(schema, "updatedBy", "3fa85f64-5717-4562-b3fc-2c963f66afa6");
     }
 
     private static void SetExample(OpenApiSchema schema, string property, JsonNode value)
