@@ -87,6 +87,23 @@ Versionado: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - `[INFRA]` Claim del actor en `AppDbContext` cambiado de `ClaimTypes.Name` a `ClaimTypes.NameIdentifier` (almacena ID del usuario en vez del username)
 - `[SUP]` `CountryCode.ValidCodes` hecho público para uso compartido entre código de producción y tests
 - `[SUP]` `SupplierResponse` ahora incluye campos de auditoría `createdBy` y `updatedBy`
+- `[INFRA]` `SortConfiguration<T>` — `AllowedSortFields` cambió de `Expression<Func<T, object>>` a `LambdaExpression` para preservar el `TKey` real y evitar nodos `Convert()` de boxing que EF Core no puede traducir a SQL
+- `[INFRA]` `SortConfiguration<T>` — `OrderBy`/`OrderByDescending` ahora se invocan via reflexión (`MethodInfo.MakeGenericMethod`) para pasar la expresión con el tipo correcto
+- `[INFRA]` `SortConfiguration<T>` — agregada propiedad opcional `TiebreakerField` (añadida como `ThenBy ASC`) para paginación offset determinista
+- `[SUP]` `SupplierSortConfiguration` — las expresiones de ordenamiento ahora referencian las propiedades value object directamente (ej. `x => x.LegalName`) en lugar de `.Value`; EF Core usa el converter `HasConversion` para SQL mientras `IComparable<T>` se usa en memoria (MockQueryable)
+- `[SUP]` `SupplierSortConfiguration` — agregado `TiebreakerField = x => x.Id` para paginación estable
+- `[SUP]` `LegalName`, `CommercialName`, `TaxId` — implementan `IComparable<T>` (delega a `string.Compare` sobre `.Value`) para soportar ordenamiento en memoria en tests unitarios
+- `[SUP]` `CountryCode` — implementa `IComparable<CountryCode>` por la misma razón
+- `[SUP]` `SupplierFilterComposer` — filtros de string cambiados de `EF.Functions.Like(x.LegalName.Value, ...)` / `EF.Property<string>(...)` a `EF.Functions.Like((string)x.LegalName, ...)`; el cast explícito invoca `implicit operator string` en memoria mientras EF Core traduce la propiedad directamente a la columna subyacente
+- `[SUP]` `SupplierFilterComposer` — filtros de enum (`status`, `riskLevel`) ahora se parsean con `Enum.TryParse` antes de construir el árbol de expresión; valores inválidos se ignoran silenciosamente (no se aplica filtro)
+- `[SUP]` `StringValueObjectConverter<T>` — `ConvertToProvider` ahora acepta tanto el tipo value object como `string` para corregir el `InvalidCastException` de EF Core 10 en la sanitización de filtros LIKE
+
+### Corregido
+
+- `[SUP]` `GET /api/suppliers?sortBy=legalName` retornaba HTTP 500 — EF Core no podía traducir `OrderBy` sobre una propiedad value object mapeada con `HasConversion` porque la expresión contenía un nodo `Convert()` de boxing. Corregido usando `LambdaExpression` y reflexión tipada para `Queryable.OrderBy<T, TKey>`.
+- `[SUP]` `GET /api/suppliers?sortBy=status` retornaba HTTP 500 — misma causa raíz (boxing de enum). Corregido con el mismo enfoque de `LambdaExpression` + reflexión.
+- `[SUP]` `GET /api/suppliers?legalName=Acme` retornaba HTTP 500 — EF Core no podía traducir `EF.Property<string>(x, "LegalName")` para predicados de filtro y también fallaba en la navegación `.Value` dentro de árboles de expresión. Corregido usando el cast explícito `(string)x.LegalName` que EF Core reduce al nombre de columna y MockQueryable resuelve via `implicit operator string`.
+- `[SUP]` `GET /api/suppliers?status=approved` (minúsculas) no retornaba resultados — el filtro de enum comparaba `x.Status.ToString() == v` que EF Core no puede traducir. Corregido pre-parseando con `Enum.TryParse(ignoreCase: true)` y comparando `x.Status == valorParsed` directamente.
 
 #### Documentación
 
