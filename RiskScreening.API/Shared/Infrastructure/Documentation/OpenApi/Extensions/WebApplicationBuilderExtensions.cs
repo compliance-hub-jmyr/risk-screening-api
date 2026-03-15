@@ -18,7 +18,7 @@ public static class WebApplicationBuilderExtensions
     ///         <item>Swashbuckle annotations support</item>
     ///         <item><see cref="StandardResponsesOperationFilter"/> for custom response attributes</item>
     ///         <item><see cref="ErrorResponse"/> schema registration</item>
-    ///         <item>API grouping by module (All, IAM, Suppliers)</item>
+    ///         <item>API grouping by module (All, IAM, Suppliers, Lists)</item>
     ///     </list>
     /// </summary>
     public static void AddOpenApiDocumentation(this WebApplicationBuilder builder)
@@ -74,6 +74,15 @@ public static class WebApplicationBuilderExtensions
                 License = license
             });
 
+            options.SwaggerDoc("lists", new OpenApiInfo
+            {
+                Title = "Risk Screening — Lists Module",
+                Version = info["Version"] ?? "v1",
+                Description = "Risk list searches: OFAC SDN, World Bank debarred firms, ICIJ Offshore Leaks.",
+                Contact = contact,
+                License = license
+            });
+
             // Route each endpoint to the correct group based on its Swagger tag
             options.DocInclusionPredicate((docName, apiDesc) =>
             {
@@ -90,6 +99,8 @@ public static class WebApplicationBuilderExtensions
                         t.Equals("Authentication", StringComparison.OrdinalIgnoreCase)),
                     "suppliers" => tags.Any(t =>
                         t.Equals("Suppliers", StringComparison.OrdinalIgnoreCase)),
+                    "lists" => tags.Any(t =>
+                        t.Equals("Lists", StringComparison.OrdinalIgnoreCase)),
                     _ => false
                 };
             });
