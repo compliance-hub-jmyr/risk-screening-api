@@ -217,15 +217,18 @@ Endpoint `GET /api/lists/search?q={termino}` (sin parametro `sources`, o `source
 **Dependencias:**
 - `US-SCR-001`, `US-SCR-002`, `US-SCR-003`
 
-**Prioridad:** Critica | **Estimacion:** 2 SP | **Estado:** Actualizado (v0.6.0 - Handler CQRS)
+**Prioridad:** Critica | **Estimacion:** 2 SP | **Estado:** Implementado (sin branch separado — integrado en `SearchRiskListsQueryHandler` desde US-SCR-001)
+
+**Nota de Implementacion:**
+Esta historia no requiere un branch dedicado `feature/us-scr-004-search-all-lists`. El comportamiento de "buscar en todas" es inherente al diseno del `SearchRiskListsQueryHandler`: cuando el parametro `sources` se omite o esta vacio, el handler consulta todas las instancias `IScrapingSource` registradas en paralelo via `Task.WhenAll`. El handler, la logica de merge, el validador y el controlador fueron todos implementados como parte de `US-SCR-001`.
 
 #### Tareas
 
-- `[BE-APP]` `SearchRiskListsQueryHandler.Handle(SearchRiskListsQuery, CancellationToken)` — selecciona fuentes por filtro `SourceNames` (o todas si null/vacío), llama instancias `IScrapingSource` en paralelo via `Task.WhenAll`, combina con `SearchResult.Merge(results)`, cachea cada resultado de fuente independientemente
-- `[BE-DOMAIN]` `SearchResult.Merge(IEnumerable<SearchResult>)` — suma `Hits` y concatena listas `Entries` de todas las fuentes; sin deduplicación (una entidad presente en múltiples listas se cuenta múltiples veces — limitación conocida)
-- `[BE-APP]` `SearchRiskListsQueryValidator` — reglas FluentValidation: `Term` no vacío, cada valor de `SourceNames` en whitelist; ejecutado automáticamente por `ValidationPipelineBehavior` antes del handler
-- `[BE-INTERFACES]` `ListsController.Search` — controlador thin: crea `SearchRiskListsQuery(q, sources)`, despacha via `IMediator`, mapea respuesta con `ScrapingResponseMapper`; sujeto a rate limiting
-- `[BE-TEST]` Unit test: resultados de las tres fuentes combinados correctamente; fallo de una fuente no impide que las otras dos retornen resultados
+- `[BE-APP]` `SearchRiskListsQueryHandler.Handle(SearchRiskListsQuery, CancellationToken)` — selecciona fuentes por filtro `SourceNames` (o todas si null/vacío), llama instancias `IScrapingSource` en paralelo via `Task.WhenAll`, combina con `SearchResult.Merge(results)`, cachea cada resultado de fuente independientemente ✅ *(implementado en US-SCR-001)*
+- `[BE-DOMAIN]` `SearchResult.Merge(IEnumerable<SearchResult>)` — suma `Hits` y concatena listas `Entries` de todas las fuentes; sin deduplicación (una entidad presente en múltiples listas se cuenta múltiples veces — limitación conocida) ✅ *(implementado en US-SCR-001)*
+- `[BE-APP]` `SearchRiskListsQueryValidator` — reglas FluentValidation: `Term` no vacío, cada valor de `SourceNames` en whitelist; ejecutado automáticamente por `ValidationPipelineBehavior` antes del handler ✅ *(implementado en US-SCR-001)*
+- `[BE-INTERFACES]` `ListsController.Search` — controlador thin: crea `SearchRiskListsQuery(q, sources)`, despacha via `IMediator`, mapea respuesta con `ScrapingResponseMapper`; sujeto a rate limiting ✅ *(implementado en US-SCR-001)*
+- `[BE-TEST]` Unit test: resultados de las tres fuentes combinados correctamente; fallo de una fuente no impide que las otras dos retornen resultados ✅ *(cubierto por `SearchRiskListsQueryHandlerTests`)*
 
 #### Criterios de Aceptacion
 
@@ -341,4 +344,4 @@ Integracion de fuentes adicionales (Sanciones UE, Consejo de Seguridad ONU, INTE
 | Sin deduplicacion | `SearchResult.Merge` suma hits y concatena entradas; una entidad presente en multiples listas se cuenta multiples veces — limitacion conocida de v1.0 |
 | Uso entre modulos | `SearchRiskListsQueryHandler` es consumido via MediatR por `RunScreeningCommandHandler` en el modulo Suppliers; el modulo Scraping no tiene dependencia de Suppliers |
 | Infraestructura de tests | Patron Mother: `RiskEntryMother`, `SearchResultMother`, `OfacHtmlMother`, `WorldBankJsonMother`, `IcijHtmlMother`; `FakeHttpMessageHandler` para simulación HTTP |
-| Estado de implementacion | Todas las historias US-SCR y TS-SCR-000 implementadas en v0.6.0 |
+| Estado de implementacion | Todas las historias US-SCR y TS-SCR-000 implementadas. US-SCR-004 no requiere branch separado — "buscar en todas" esta integrado en `SearchRiskListsQueryHandler` (consulta todas las fuentes cuando `sources` se omite) |

@@ -217,15 +217,18 @@ Endpoint `GET /api/lists/search?q={term}` (no `sources` parameter, or `sources=o
 **Dependencies:**
 - `US-SCR-001`, `US-SCR-002`, `US-SCR-003`
 
-**Priority:** Critical | **Estimate:** 2 SP | **Status:** Updated (v0.6.0 - CQRS Handler)
+**Priority:** Critical | **Estimate:** 2 SP | **Status:** Implemented (no separate branch — built into `SearchRiskListsQueryHandler` from US-SCR-001)
+
+**Implementation Note:**
+This story does not require a dedicated `feature/us-scr-004-search-all-lists` branch. The "search all" behavior is inherent to the `SearchRiskListsQueryHandler` design: when the `sources` parameter is omitted or empty, the handler queries all registered `IScrapingSource` instances in parallel via `Task.WhenAll`. The handler, merge logic, validator, and controller were all implemented as part of `US-SCR-001`.
 
 #### Tasks
 
-- `[BE-APP]` `SearchRiskListsQueryHandler.Handle(SearchRiskListsQuery, CancellationToken)` — selects sources by `SourceNames` filter (or all if null/empty), calls `IScrapingSource` instances in parallel via `Task.WhenAll`, merges with `SearchResult.Merge(results)`, caches each source result independently
-- `[BE-DOMAIN]` `SearchResult.Merge(IEnumerable<SearchResult>)` — sums `Hits` and concatenates `Entries` lists from all sources; no deduplication (an entity present in multiple lists is counted multiple times — known limitation)
-- `[BE-APP]` `SearchRiskListsQueryValidator` — FluentValidation rules: `Term` not empty, each `SourceNames` value in whitelist; auto-executed by `ValidationPipelineBehavior` before handler
-- `[BE-INTERFACES]` `ListsController.Search` — thin controller: creates `SearchRiskListsQuery(q, sources)`, dispatches via `IMediator`, maps response with `ScrapingResponseMapper`; subject to rate limiting
-- `[BE-TEST]` Unit test: results from all three sources merged correctly; one source failing does not prevent the other two from returning results
+- `[BE-APP]` `SearchRiskListsQueryHandler.Handle(SearchRiskListsQuery, CancellationToken)` — selects sources by `SourceNames` filter (or all if null/empty), calls `IScrapingSource` instances in parallel via `Task.WhenAll`, merges with `SearchResult.Merge(results)`, caches each source result independently ✅ *(implemented in US-SCR-001)*
+- `[BE-DOMAIN]` `SearchResult.Merge(IEnumerable<SearchResult>)` — sums `Hits` and concatenates `Entries` lists from all sources; no deduplication (an entity present in multiple lists is counted multiple times — known limitation) ✅ *(implemented in US-SCR-001)*
+- `[BE-APP]` `SearchRiskListsQueryValidator` — FluentValidation rules: `Term` not empty, each `SourceNames` value in whitelist; auto-executed by `ValidationPipelineBehavior` before handler ✅ *(implemented in US-SCR-001)*
+- `[BE-INTERFACES]` `ListsController.Search` — thin controller: creates `SearchRiskListsQuery(q, sources)`, dispatches via `IMediator`, maps response with `ScrapingResponseMapper`; subject to rate limiting ✅ *(implemented in US-SCR-001)*
+- `[BE-TEST]` Unit test: results from all three sources merged correctly; one source failing does not prevent the other two from returning results ✅ *(covered by `SearchRiskListsQueryHandlerTests`)*
 
 #### Acceptance Criteria
 
@@ -341,4 +344,4 @@ Integrate additional sources (EU Sanctions, UN Security Council, INTERPOL). The 
 | No deduplication | `SearchResult.Merge` sums hits and concatenates entries; an entity present in multiple lists is counted multiple times — known v1.0 limitation |
 | Cross-module usage | `SearchRiskListsQueryHandler` is consumed via MediatR by `RunScreeningCommandHandler` in the Suppliers module; the Scraping module has no dependency on Suppliers |
 | Test infrastructure | Mother pattern: `RiskEntryMother`, `SearchResultMother`, `OfacHtmlMother`, `WorldBankJsonMother`, `IcijHtmlMother`; `FakeHttpMessageHandler` for HTTP simulation |
-| Implementation status | All US-SCR stories and TS-SCR-000 implemented in v0.6.0 |
+| Implementation status | All US-SCR stories and TS-SCR-000 implemented. US-SCR-004 does not require a separate branch — "search all" is built into `SearchRiskListsQueryHandler` (queries all sources when `sources` is omitted) |
