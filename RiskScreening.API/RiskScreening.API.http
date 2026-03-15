@@ -115,6 +115,13 @@ Authorization: Bearer {{token}}
 
 ###
 
+### Search World Bank — multi-field match (matches by name AND address)
+GET http://localhost:5215/api/lists/search?q=national bio-medical&sources=worldbank
+Api-Version: 1
+Authorization: Bearer {{token}}
+
+###
+
 ### Search ICIJ only
 GET http://localhost:5215/api/lists/search?q=mossack fonseca&sources=icij
 Api-Version: 1
