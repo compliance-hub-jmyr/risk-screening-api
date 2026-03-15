@@ -24,9 +24,12 @@ public static class ScrapingModuleExtensions
 
         builder.Services.AddHttpClient("Ofac", client =>
         {
-            client.BaseAddress = new Uri("https://www.treasury.gov/");
-            client.Timeout = TimeSpan.FromSeconds(30);
+            client.BaseAddress = new Uri("https://sanctionssearch.ofac.treas.gov/");
+            client.Timeout = TimeSpan.FromSeconds(45); // Increased timeout for scraping
             client.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
+            client.DefaultRequestHeaders.Add("Accept",
+                "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+            client.DefaultRequestHeaders.Add("Accept-Language", "en-US,en;q=0.9");
         });
 
         builder.Services.AddHttpClient("WorldBank", client =>
