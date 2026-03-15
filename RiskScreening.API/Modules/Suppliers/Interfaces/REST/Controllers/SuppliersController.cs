@@ -32,8 +32,7 @@ public class SuppliersController(IMediator mediator)
         var command = CreateSupplierRequestMapper.ToCommand(request);
         var supplier = await mediator.Send(command, ct);
         var response = SupplierResponseMapper.ToResponse(supplier);
-        // TODO: Change nameof(Create) to nameof(GetById) when the GetById method is implemented.
-        return CreatedAtAction(nameof(Create), new { id = supplier.Id }, response);
+        return CreatedAtAction(nameof(GetById), new { id = supplier.Id }, response);
     }
 
     /// <inheritdoc/>
@@ -55,5 +54,16 @@ public class SuppliersController(IMediator mediator)
         var query = new GetAllSuppliersQuery(legalName, commercialName, taxId, country, status, riskLevel, page, size, sortBy, sortDirection);
         var result = await mediator.Send(query, ct);
         return Ok(SupplierResponseMapper.ToPageResponse(result));
+    }
+
+    /// <inheritdoc/>
+    [HttpGet("{id}")]
+    [ProducesResponseType(typeof(SupplierResponse), StatusCodes.Status200OK)]
+    [ApiResponseNotFound]
+    public async Task<IActionResult> GetById(string id, CancellationToken ct)
+    {
+        var query = new GetSupplierByIdQuery(id);
+        var supplier = await mediator.Send(query, ct);
+        return Ok(SupplierResponseMapper.ToResponse(supplier));
     }
 }
