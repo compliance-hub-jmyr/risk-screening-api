@@ -57,8 +57,10 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - `[SCR]` Swagger API grouping: "Lists Module" added to dropdown
 - `[SCR]` OpenAPI specification (`openapi-lists.yaml`)
 - `[SCR]` HTTP test file (`RiskScreening.API.http`) — search requests for all sources, individual sources, error cases
-- `[SCR]` Unit tests: `OfacScrapingSourceTests` (16 tests), `SearchRiskListsQueryHandlerTests` (10 tests), `SearchResultTests` (5 tests)
-- `[SCR]` Test infrastructure: `RiskEntryMother`, `SearchResultMother`, `OfacHtmlMother`, `FakeHttpMessageHandler`
+- `[SCR]` `WorldBankScrapingSource` (`Infrastructure/Sources/`) — adapter for World Bank Debarred Firms; two-step web scraping: GET HTML page → extract API config from JavaScript → GET JSON API → filter and map
+- `[SCR]` `WorldBankHtmlParser` (`Infrastructure/Sources/`) — unified parser: `ExtractApiConfig()` scrapes `<script>` tags with `HtmlAgilityPack` to extract API URL + key; `ParseResults()` deserializes `response.ZPROCSUPP` JSON, filters firms by search term (multi-field OR logic across name, address, city, state, country, grounds), combines address components, maps "Ongoing"/"Permanent" ineligibility status to `toDate`
+- `[SCR]` Unit tests: `OfacScrapingSourceTests` (16 tests), `WorldBankScrapingSourceTests` (18 tests), `SearchRiskListsQueryHandlerTests` (10 tests), `SearchResultTests` (5 tests)
+- `[SCR]` Test infrastructure: `RiskEntryMother`, `SearchResultMother`, `OfacHtmlMother`, `WorldBankJsonMother`, `FakeHttpMessageHandler`
 
 #### Suppliers Module
 

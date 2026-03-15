@@ -57,8 +57,10 @@ Versionado: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - `[SCR]` Agrupación de API en Swagger: "Lists Module" agregado al dropdown
 - `[SCR]` Especificación OpenAPI (`openapi-lists.yaml`)
 - `[SCR]` Archivo HTTP de pruebas (`RiskScreening.API.http`) — requests de búsqueda para todas las fuentes, fuentes individuales, casos de error
-- `[SCR]` Tests unitarios: `OfacScrapingSourceTests` (16 tests), `SearchRiskListsQueryHandlerTests` (10 tests), `SearchResultTests` (5 tests)
-- `[SCR]` Infraestructura de tests: `RiskEntryMother`, `SearchResultMother`, `OfacHtmlMother`, `FakeHttpMessageHandler`
+- `[SCR]` `WorldBankScrapingSource` (`Infrastructure/Sources/`) — adaptador para Firmas Excluidas del Banco Mundial; web scraping en dos pasos: GET página HTML → extraer config del API del JavaScript → GET API JSON → filtrar y mapear
+- `[SCR]` `WorldBankHtmlParser` (`Infrastructure/Sources/`) — parser unificado: `ExtractApiConfig()` scrapea tags `<script>` con `HtmlAgilityPack` para extraer URL del API + key; `ParseResults()` deserializa JSON `response.ZPROCSUPP`, filtra firmas por término de búsqueda (lógica OR multi-campo en nombre, dirección, ciudad, estado, país, motivos), combina componentes de dirección, mapea estado de inelegibilidad "Ongoing"/"Permanent" a `toDate`
+- `[SCR]` Tests unitarios: `OfacScrapingSourceTests` (16 tests), `WorldBankScrapingSourceTests` (18 tests), `SearchRiskListsQueryHandlerTests` (10 tests), `SearchResultTests` (5 tests)
+- `[SCR]` Infraestructura de tests: `RiskEntryMother`, `SearchResultMother`, `OfacHtmlMother`, `WorldBankJsonMother`, `FakeHttpMessageHandler`
 
 #### Módulo Suppliers
 
