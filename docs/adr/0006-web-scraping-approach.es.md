@@ -10,7 +10,7 @@
 
 El módulo Scraping requiere obtener datos de tres fuentes externas:
 1. **OFAC SDN** — US Treasury Sanctions List Search (formulario web en `https://sanctionssearch.ofac.treas.gov/`)
-2. **World Bank Debarred Firms** — Página web con tabla HTML paginada
+2. **World Bank Debarred Firms** — Grid Kendo UI en `https://projects.worldbank.org/en/projects-operations/procurement/debarred-firms` (carga datos dinámicamente via AJAX; filtrado client-side)
 3. **ICIJ Offshore Leaks** — API REST pública (búsqueda por consulta; sin descarga completa del dataset)
 
 Se evaluaron dos estrategias de obtención de datos:
@@ -50,10 +50,25 @@ Este enfoque es más simple de implementar y operar en la Fase 1, evita la compl
 - **Timeout del cliente HTTP**: 45 segundos (aumentado para manejar envío de formulario + parsing)
 
 #### World Bank Debarred Firms
-- Fuente: `https://projects.worldbank.org/en/projects-operations/procurement/debarred-firms?srchTerm={consulta}`
-- Método: HTTP GET + parsing de tabla HTML con `HtmlAgilityPack`
-- Clave de cache: `scraping:worldbank:{consultaNormalizada}`
-- TTL: **10 minutos**
+- **Referencia del assessment**: `https://projects.worldbank.org/en/projects-operations/procurement/debarred-firms` (grid Kendo UI con filtrado client-side)
+- **API real**: `https://apigwext.worldbank.org/dvsvc/v1.0/json/APPLICATION/ADOBE_EXPRNCE_MGR/FIRM/SANCTIONED_FIRM` (API JSON usada por la página web; requiere API key público en header `apikey`)
+- **Método**: Web scraping en dos pasos via `HtmlAgilityPack` + `System.Text.Json` (mismo patrón GET → GET que el GET → POST de OFAC)
+  1. `WorldBankScrapingSource` (adaptador) orquesta el flujo HTTP en dos pasos:
+     - **Paso 1 (scrape):** GET la página HTML → `WorldBankHtmlParser.ExtractApiConfig()` parsea tags `<script>` con `HtmlAgilityPack` para extraer las variables JavaScript `prodtabApi` (URL del API) y `propApiKey` (API key)
+     - **Paso 2 (fetch):** GET la API JSON usando URL y key extraídos (mismo request que el browser hace via AJAX) → `WorldBankHtmlParser.ParseResults()` deserializa y filtra
+  2. `WorldBankHtmlParser` (helper estático unificado — mismo patrón que `OfacHtmlParser`) maneja ambos pasos:
+     - `ExtractApiConfig()`: Parsea tags `<script>` con `HtmlAgilityPack`, extrae `var prodtabApi = "..."` y `var propApiKey = "..."` usando `GeneratedRegex`
+     - `ParseResults()`: Procesamiento JSON:
+     - Deserializa array `response.ZPROCSUPP` de DTOs de firmas
+     - Filtra firmas donde el término de búsqueda coincide con cualquier campo (contains case-insensitive, lógica OR en nombre, dirección, ciudad, estado, país, motivos)
+     - Mapea `SUPP_NAME`, `SUPP_ADDR`/`SUPP_CITY`/`SUPP_STATE_CODE`/`SUPP_ZIP_CODE` (combinados), `COUNTRY_NAME`, `DEBAR_FROM_DATE`, `DEBAR_TO_DATE`, `DEBAR_REASON` a `RiskEntry`
+     - Cuando `INELIGIBLY_STATUS` es "Permanent" u "Ongoing", usa esa etiqueta para `ToDate` en lugar de la fecha centinela (`2999-12-31`)
+  4. Campos extraídos: Firm Name (→ `Name`), Address (componentes combinados), Country, FromDate, ToDate (o Ineligibility Status), Grounds
+- **¿Por qué scraping en dos pasos?** La página del Banco Mundial es un grid Kendo UI que carga datos dinámicamente via AJAX — el HTML inicial no contiene datos de firmas. El scraper extrae el endpoint de la API y la key del JavaScript de la página, luego replica el mismo request AJAX que hace el browser. Esto asegura que el adaptador se adapta automáticamente si la API key se rota.
+- **Arquitectura**: Mismo patrón Ports & Adapters que OFAC — puerto `IScrapingSource`, adaptador `WorldBankScrapingSource` en `Infrastructure/Sources/`
+- **Clave de cache**: `scraping:worldbank:{consultaNormalizada}`
+- **TTL**: **10 minutos**
+- **Timeout del cliente HTTP**: 45 segundos (aumentado — dos requests HTTP)
 
 #### ICIJ Offshore Leaks
 - Fuente: `https://offshoreleaks.icij.org/api/nodes?q={consulta}` (API REST pública)
@@ -85,6 +100,7 @@ Si un fetch en vivo falla (timeout, error HTTP, error de parsing):
 - La primera solicitud para un término nuevo incurre en latencia de fetch en vivo (envío de formulario OFAC + parsing HTML puede tardar 2–5 s)
 - Si la fuente externa no está disponible al momento de la consulta, la solicitud falla (sin fallback pre-cacheado)
 - El scraping de OFAC es más frágil que el parsing XML — cambios en la estructura del formulario ASP.NET o formato de la tabla HTML romperán el scraper
+- La API JSON de World Bank requiere un API key público embebido en el JavaScript de la página — si la clave se rota, el adaptador debe actualizarse
 
 **Mitigación:**
 - Usar políticas de retry y timeout de `Polly` en todos los clientes HTTP para reducir el impacto de fallos transitorios
@@ -94,7 +110,8 @@ Si un fetch en vivo falla (timeout, error HTTP, error de parsing):
 
 | Paquete | Versión | Propósito |
 |---------|---------|-----------|
-| `HtmlAgilityPack` | 1.11.71 | Parsing HTML para OFAC y World Bank |
+| `HtmlAgilityPack` | 1.11.71 | Parsing HTML para OFAC (formulario + tabla de resultados) y World Bank (extracción de JavaScript) |
+| `System.Text.Json` | .NET 10 | Deserialización JSON para respuestas de la API de World Bank |
 | `Microsoft.Extensions.Http` | .NET 10 | `HttpClientFactory` para clientes tipados |
 | `Polly` | 8.x (futuro) | Políticas de retry y timeout para solicitudes HTTP |
 
