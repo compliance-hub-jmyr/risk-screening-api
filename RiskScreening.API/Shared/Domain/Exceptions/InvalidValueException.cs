@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace RiskScreening.API.Shared.Domain.Exceptions;
 
 /// <summary>
@@ -60,7 +62,7 @@ public class InvalidValueException : DomainException
     // e.g. "EmailAddress" → "INVALID_EMAIL_ADDRESS"
     private static string BuildErrorCode(string valueObjectName)
     {
-        return "INVALID_" + System.Text.RegularExpressions.Regex
+        return "INVALID_" + Regex
             .Replace(valueObjectName, "([a-z])([A-Z])", "$1_$2")
             .ToUpperInvariant();
     }
