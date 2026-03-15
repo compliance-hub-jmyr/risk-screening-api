@@ -66,7 +66,7 @@ C4Container
     Rel(api, cache, "Lee/escribe resultados de scraping y contadores de rate limit", "In-process")
     Rel(api, ofac, "HTTP GET bajo demanda — descarga SDN XML", "HTTPS")
     Rel(api, wb, "HTTP GET bajo demanda — parsea tabla HTML paginada", "HTTPS")
-    Rel(api, icij, "HTTP GET bajo demanda — consulta API REST pública", "HTTPS")
+    Rel(api, icij, "Scraping con headless browser bajo demanda — renderiza SPA + parsea HTML", "HTTPS")
 ```
 
 > **Nota:** La Fase 1 usa scraping bajo demanda (sin worker en background). Un worker `BackgroundService` de pre-población está planificado para la Fase 2 (solo OFAC y World Bank; ICIJ permanece bajo demanda de forma permanente).
@@ -99,7 +99,7 @@ C4Component
             Component(orchSvc, "ScrapingOrchestrationService", "Infrastructure Service", "SearchSourceAsync(source, term) — fuente individual. SearchAllAsync(term) — paralelo en todas las fuentes. Resultados cacheados en IMemoryCache.")
             Component(ofacSrc, "OfacScrapingSource", "IScrapingSource", "Web scraping del formulario OFAC en sanctionssearch.ofac.treas.gov con HtmlAgilityPack (GET pagina + POST formulario). SourceName = OFAC.")
             Component(wbSrc, "WorldBankScrapingSource", "IScrapingSource", "Scrapea pagina HTML de World Bank con HtmlAgilityPack para extraer config del API, luego obtiene API JSON. SourceName = WORLD_BANK.")
-            Component(icijSrc, "IcijScrapingSource", "IScrapingSource", "Consulta /api/nodes de offshoreleaks.icij.org. SourceName = ICIJ.")
+            Component(icijSrc, "IcijScrapingSource", "IScrapingSource", "Scrapea pagina de busqueda ICIJ en offshoreleaks.icij.org usando Playwright headless Chromium (renderizado SPA + bypass WAF CloudFront) + parsing HTML con HtmlAgilityPack. SourceName = ICIJ.")
         }
 
         Boundary(suppliers, "Suppliers Module") {

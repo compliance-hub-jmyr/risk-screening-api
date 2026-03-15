@@ -124,16 +124,20 @@ internal static partial class WorldBankHtmlParser
     ///     Matches the search term against all searchable fields (OR logic),
     ///     mirroring the World Bank website's client-side filter.
     /// </summary>
-    private static bool MatchesTerm(WorldBankFirmDto firm, string term) =>
-        Contains(firm.SuppName, term) ||
-        Contains(firm.SuppAddr, term) ||
-        Contains(firm.SuppCity, term) ||
-        Contains(firm.SuppStateCode, term) ||
-        Contains(firm.CountryName, term) ||
-        Contains(firm.DebarReason, term);
+    private static bool MatchesTerm(WorldBankFirmDto firm, string term)
+    {
+        return Contains(firm.SuppName, term) ||
+               Contains(firm.SuppAddr, term) ||
+               Contains(firm.SuppCity, term) ||
+               Contains(firm.SuppStateCode, term) ||
+               Contains(firm.CountryName, term) ||
+               Contains(firm.DebarReason, term);
+    }
 
-    private static bool Contains(string? field, string term) =>
-        !string.IsNullOrEmpty(field) && field.Contains(term, StringComparison.OrdinalIgnoreCase);
+    private static bool Contains(string? field, string term)
+    {
+        return !string.IsNullOrEmpty(field) && field.Contains(term, StringComparison.OrdinalIgnoreCase);
+    }
 
     /// <summary>Maps a single World Bank firm DTO to a <see cref="RiskEntry"/>.</summary>
     private static RiskEntry MapToRiskEntry(WorldBankFirmDto firm)
@@ -145,20 +149,20 @@ internal static partial class WorldBankHtmlParser
             : NullIfEmpty(firm.DebarToDate);
 
         return new RiskEntry(
-            ListSource: "WORLD_BANK",
-            Name: NullIfEmpty(firm.SuppName),
-            Address: BuildAddress(firm),
-            Type: null,
-            List: null,
-            Programs: null,
-            Score: null,
-            Country: NullIfEmpty(firm.CountryName),
-            FromDate: NullIfEmpty(firm.DebarFromDate),
-            ToDate: toDate,
-            Grounds: NullIfEmpty(firm.DebarReason),
-            Jurisdiction: null,
-            LinkedTo: null,
-            DataFrom: null);
+            "WORLD_BANK",
+            NullIfEmpty(firm.SuppName),
+            BuildAddress(firm),
+            null,
+            null,
+            null,
+            null,
+            NullIfEmpty(firm.CountryName),
+            NullIfEmpty(firm.DebarFromDate),
+            toDate,
+            NullIfEmpty(firm.DebarReason),
+            null,
+            null,
+            null);
     }
 
     /// <summary>
@@ -176,8 +180,10 @@ internal static partial class WorldBankHtmlParser
     }
 
     /// <summary>Returns <c>null</c> when the string is empty or whitespace-only.</summary>
-    private static string? NullIfEmpty(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private static string? NullIfEmpty(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
 
     /// <summary>Matches <c>var prodtabApi = "..."</c> in JavaScript.</summary>
     [GeneratedRegex("""var\s+prodtabApi\s*=\s*"([^"]+)"\s*;""")]
@@ -193,15 +199,13 @@ internal static partial class WorldBankHtmlParser
 /// <summary>Top-level envelope of the World Bank Debarred Firms API.</summary>
 internal sealed class WorldBankApiResponse
 {
-    [JsonPropertyName("response")]
-    public WorldBankResponseData? Response { get; init; }
+    [JsonPropertyName("response")] public WorldBankResponseData? Response { get; init; }
 }
 
 /// <summary>Contains the <c>ZPROCSUPP</c> array of sanctioned firms.</summary>
 internal sealed class WorldBankResponseData
 {
-    [JsonPropertyName("ZPROCSUPP")]
-    public List<WorldBankFirmDto>? Zprocsupp { get; init; }
+    [JsonPropertyName("ZPROCSUPP")] public List<WorldBankFirmDto>? Zprocsupp { get; init; }
 }
 
 /// <summary>
@@ -210,35 +214,25 @@ internal sealed class WorldBankResponseData
 /// </summary>
 internal sealed class WorldBankFirmDto
 {
-    [JsonPropertyName("SUPP_NAME")]
-    public string? SuppName { get; init; }
+    [JsonPropertyName("SUPP_NAME")] public string? SuppName { get; init; }
 
-    [JsonPropertyName("ADD_SUPP_INFO")]
-    public string? AddSuppInfo { get; init; }
+    [JsonPropertyName("ADD_SUPP_INFO")] public string? AddSuppInfo { get; init; }
 
-    [JsonPropertyName("SUPP_ADDR")]
-    public string? SuppAddr { get; init; }
+    [JsonPropertyName("SUPP_ADDR")] public string? SuppAddr { get; init; }
 
-    [JsonPropertyName("SUPP_CITY")]
-    public string? SuppCity { get; init; }
+    [JsonPropertyName("SUPP_CITY")] public string? SuppCity { get; init; }
 
-    [JsonPropertyName("SUPP_STATE_CODE")]
-    public string? SuppStateCode { get; init; }
+    [JsonPropertyName("SUPP_STATE_CODE")] public string? SuppStateCode { get; init; }
 
-    [JsonPropertyName("SUPP_ZIP_CODE")]
-    public string? SuppZipCode { get; init; }
+    [JsonPropertyName("SUPP_ZIP_CODE")] public string? SuppZipCode { get; init; }
 
-    [JsonPropertyName("COUNTRY_NAME")]
-    public string? CountryName { get; init; }
+    [JsonPropertyName("COUNTRY_NAME")] public string? CountryName { get; init; }
 
-    [JsonPropertyName("DEBAR_FROM_DATE")]
-    public string? DebarFromDate { get; init; }
+    [JsonPropertyName("DEBAR_FROM_DATE")] public string? DebarFromDate { get; init; }
 
-    [JsonPropertyName("DEBAR_TO_DATE")]
-    public string? DebarToDate { get; init; }
+    [JsonPropertyName("DEBAR_TO_DATE")] public string? DebarToDate { get; init; }
 
-    [JsonPropertyName("DEBAR_REASON")]
-    public string? DebarReason { get; init; }
+    [JsonPropertyName("DEBAR_REASON")] public string? DebarReason { get; init; }
 
     [JsonPropertyName("INELIGIBLY_STATUS")]
     public string? IneligiblyStatus { get; init; }

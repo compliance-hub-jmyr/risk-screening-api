@@ -11,7 +11,7 @@
 The Scraping module requires obtaining data from three external sources:
 1. **OFAC SDN** — US Treasury Sanctions List Search (web form at `https://sanctionssearch.ofac.treas.gov/`)
 2. **World Bank Debarred Firms** — Kendo UI grid at `https://projects.worldbank.org/en/projects-operations/procurement/debarred-firms` (loads data dynamically via AJAX; client-side filtering)
-3. **ICIJ Offshore Leaks** — Public REST API (per-query search; no full dataset download)
+3. **ICIJ Offshore Leaks** — JavaScript SPA at `https://offshoreleaks.icij.org/` protected by AWS CloudFront WAF; requires headless browser rendering
 
 Two data retrieval strategies were evaluated:
 
@@ -71,10 +71,22 @@ This approach is simpler to implement and operate in Phase 1, avoids the complex
 - **HTTP Client timeout**: 45 seconds (increased — two HTTP requests)
 
 #### ICIJ Offshore Leaks
-- Source: `https://offshoreleaks.icij.org/api/nodes?q={query}` (public REST API)
-- Method: HTTP GET — real-time per-query search; the public API supports per-query search natively
-- Cache key: `scraping:icij:{normalizedQuery}`
-- TTL: **10 minutes**
+- **Assessment reference**: `https://offshoreleaks.icij.org/` (JavaScript SPA — results rendered client-side, protected by AWS CloudFront WAF)
+- **Method**: Headless browser scraping via `Microsoft.Playwright` (Chromium) + `HtmlAgilityPack` for HTML parsing
+  1. `IcijScrapingSource` (adapter) launches a headless Chromium instance with anti-detection flags (`--disable-blink-features=AutomationControlled`, custom User-Agent, `navigator.webdriver = false`) to bypass CloudFront bot protection
+  2. Navigates to `/search?q={term}&c=&j=&d=` and waits for `NetworkIdle` + the results table selector (`table.table tbody tr`)
+  3. Extracts the fully rendered HTML and passes it to `IcijHtmlParser`
+  4. `IcijHtmlParser` (static helper) parses the HTML results table with `HtmlAgilityPack`:
+     - Locates `<table class="table">` → `<tbody>` → `<tr>` rows
+     - Extracts 4 columns: Entity (→ `Name`), Jurisdiction, Linked To (→ `LinkedTo`), Data From (→ `DataFrom`)
+     - Decodes HTML entities and normalizes whitespace
+  5. Extracted fields: Name, Jurisdiction, LinkedTo, DataFrom
+- **Why Playwright?** The ICIJ website migrated to a JavaScript SPA that returns HTTP 202 with empty body for server-side requests. `HtmlAgilityPack` alone cannot execute JavaScript. Additionally, CloudFront WAF blocks standard headless browser signatures — Playwright with stealth configuration bypasses this protection.
+- **Architecture**: Same Ports & Adapters pattern as OFAC — `IScrapingSource` port, `IcijScrapingSource` adapter in `Infrastructure/Sources/`
+- **Note**: Unlike OFAC and World Bank, ICIJ does not use `IHttpClientFactory` — Playwright manages its own browser lifecycle within each `SearchAsync` call.
+- **Cache key**: `scraping:icij:{normalizedQuery}`
+- **TTL**: **10 minutes**
+- **Browser timeout**: 30 seconds (page navigation) + 10 seconds (table selector wait)
 
 ### Error handling (fault-tolerant)
 
@@ -110,7 +122,8 @@ If a live fetch fails (timeout, HTTP error, parse error):
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| `HtmlAgilityPack` | 1.11.71 | HTML parsing for OFAC (form + results table) and World Bank (JavaScript extraction) |
+| `HtmlAgilityPack` | 1.11.71 | HTML parsing for OFAC (form + results table), World Bank (JavaScript extraction), and ICIJ (rendered DOM parsing) |
+| `Microsoft.Playwright` | 1.58.0 | Headless Chromium for ICIJ SPA rendering (bypasses CloudFront WAF bot detection) |
 | `System.Text.Json` | .NET 10 | JSON deserialization for World Bank API responses |
 | `Microsoft.Extensions.Http` | .NET 10 | `HttpClientFactory` for typed clients |
 | `Polly` | 8.x (future) | Retry and timeout policies for HTTP requests |
@@ -120,4 +133,5 @@ If a live fetch fails (timeout, HTTP error, parse error):
 - [ICIJ Offshore Leaks API](https://offshoreleaks.icij.org/api)
 - [HtmlAgilityPack](https://html-agility-pack.net/)
 - [Polly — .NET Resilience Library](https://github.com/App-vNext/Polly)
+- [Microsoft.Playwright for .NET](https://playwright.dev/dotnet/)
 - ADR-0008 — Cache technology: IMemoryCache (Phase 1)

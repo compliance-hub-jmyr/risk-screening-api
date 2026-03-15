@@ -152,25 +152,31 @@ Endpoint `GET /api/lists/search?q={termino}&sources=worldbank` que realiza web s
 
 ### US-SCR-003: Buscar en la base de datos Offshore Leaks de ICIJ
 
-**Titulo:** Consultar la API JSON de Offshore Leaks de ICIJ
+**Titulo:** Scrapear la pagina de busqueda de ICIJ Offshore Leaks
 
 **Descripcion:**
 Como oficial de compliance, quiero buscar en la base de datos Offshore Leaks del ICIJ, para identificar proveedores vinculados a entidades offshore mencionadas en Panama Papers, Paradise Papers u otras investigaciones similares.
 
 **Entregable:**
-Endpoint `GET /api/lists/search?q={termino}&sources=icij` que consulta la API JSON publica del ICIJ, deserializa el array `nodes` y retorna un `ScrapingResponse`. Los resultados se cachean por 10 minutos por termino de busqueda.
+Endpoint `GET /api/lists/search?q={termino}&sources=icij` que scrapea la pagina de busqueda de ICIJ Offshore Leaks usando `Microsoft.Playwright` (Chromium headless con flags stealth anti-deteccion) para renderizar la SPA JavaScript, luego parsea la tabla HTML de resultados con `HtmlAgilityPack`, y retorna un `ScrapingResponse`. Los resultados se cachean por 10 minutos por termino de busqueda.
 
 **Dependencias:**
 - `US-SCR-001` (misma infraestructura, mismo patron)
 
-**Prioridad:** Alta | **Estimacion:** 2 SP | **Estado:** Actualizado (v0.6.0)
+**Prioridad:** Alta | **Estimacion:** 2 SP | **Estado:** Implementado (v0.7.0)
 
 #### Tareas
 
-- `[BE-INFRA]` `IcijScrapingSource` — adaptador que implementa `IScrapingSource`; obtiene `https://offshoreleaks.icij.org/api/nodes?q={term}`, deserializa array `nodes` con `System.Text.Json` en DTOs internos `IcijNode`; mapea a `RiskEntry` con `ListSource = "ICIJ"`, `Name` (caption del nodo con fallback a name), `Jurisdiction`, `LinkedTo`, `DataFrom`; los campos OFAC/Banco Mundial quedan en `null`; retorna `SearchResult.Empty` ante fallos
+- `[BE-INFRA]` `IcijScrapingSource` — adaptador que implementa `IScrapingSource`; scraping con navegador headless via `Microsoft.Playwright` (Chromium): lanza navegador con flags anti-deteccion (`--disable-blink-features=AutomationControlled`, User-Agent personalizado, `navigator.webdriver = false`), navega a la pagina de busqueda, espera el selector de tabla, extrae HTML renderizado → parsea via `IcijHtmlParser`; mapea a `RiskEntry` con:
+  - `ListSource = "ICIJ"`
+  - `Name` (nombre de entidad de la celda de la tabla)
+  - `Jurisdiction`, `LinkedTo`, `DataFrom`
+  - Campos OFAC/Banco Mundial quedan en `null`
+  - Retorna `SearchResult.Empty` ante fallos (error de lanzamiento del navegador, timeout, bloqueo CloudFront)
+- `[BE-INFRA]` `IcijHtmlParser` — helper estatico que parsea el HTML renderizado por Playwright con `HtmlAgilityPack`; extrae 4 columnas: Entity (→ Name), Jurisdiction, Linked To (→ LinkedTo), Data From (→ DataFrom); decodifica entidades HTML y normaliza espacios en blanco
 - `[BE-APP]` `SearchRiskListsQueryHandler` cachea resultado por `scraping:icij:{term}` por 10 min (handler compartido)
 - `[BE-INTERFACES]` `ListsController.Search` con `sources=icij` — requiere `q`; sujeto a rate limiting
-- `[BE-TEST]` Unit test: nodos deserializados correctamente, array `nodes` vacio retorna resultado vacio
+- `[BE-TEST]` `IcijScrapingSourceTests` (14 tests) — usa `IcijHtmlMother` para fixtures HTML; cubre mapeo de campos de entidad, multiples resultados, decodificacion de entidades HTML, normalizacion de espacios, campos vacios, WAF challenge, escenarios de error (error HTTP, timeout, HTML invalido)
 
 #### Criterios de Aceptacion
 
@@ -182,12 +188,12 @@ Endpoint `GET /api/lists/search?q={termino}&sources=icij` que consulta la API JS
 - And cada entrada incluye `listSource = "ICIJ"`, `name`, `jurisdiction`, `linkedTo`, `dataFrom`
 
 **Escenario 2: Sin coincidencias**
-- Given que el termino de busqueda retorna un array `nodes` vacio desde la API de ICIJ
+- Given que el termino de busqueda no retorna coincidencias en la tabla de resultados de ICIJ
 - When envio la peticion
 - Then recibo HTTP 200 con `{ hits: 0, entries: [] }`
 
 **Escenario 3: API de ICIJ no disponible**
-- Given que la API de ICIJ no es accesible
+- Given que el sitio de ICIJ no es accesible o retorna un WAF challenge
 - When envio la peticion
 - Then recibo HTTP 200 con `{ hits: 0, entries: [] }` (tolerante a fallos)
 
@@ -211,15 +217,18 @@ Endpoint `GET /api/lists/search?q={termino}` (sin parametro `sources`, o `source
 **Dependencias:**
 - `US-SCR-001`, `US-SCR-002`, `US-SCR-003`
 
-**Prioridad:** Critica | **Estimacion:** 2 SP | **Estado:** Actualizado (v0.6.0 - Handler CQRS)
+**Prioridad:** Critica | **Estimacion:** 2 SP | **Estado:** Implementado (sin branch separado — integrado en `SearchRiskListsQueryHandler` desde US-SCR-001)
+
+**Nota de Implementacion:**
+Esta historia no requiere un branch dedicado `feature/us-scr-004-search-all-lists`. El comportamiento de "buscar en todas" es inherente al diseno del `SearchRiskListsQueryHandler`: cuando el parametro `sources` se omite o esta vacio, el handler consulta todas las instancias `IScrapingSource` registradas en paralelo via `Task.WhenAll`. El handler, la logica de merge, el validador y el controlador fueron todos implementados como parte de `US-SCR-001`.
 
 #### Tareas
 
-- `[BE-APP]` `SearchRiskListsQueryHandler.Handle(SearchRiskListsQuery, CancellationToken)` — selecciona fuentes por filtro `SourceNames` (o todas si null/vacío), llama instancias `IScrapingSource` en paralelo via `Task.WhenAll`, combina con `SearchResult.Merge(results)`, cachea cada resultado de fuente independientemente
-- `[BE-DOMAIN]` `SearchResult.Merge(IEnumerable<SearchResult>)` — suma `Hits` y concatena listas `Entries` de todas las fuentes; sin deduplicación (una entidad presente en múltiples listas se cuenta múltiples veces — limitación conocida)
-- `[BE-APP]` `SearchRiskListsQueryValidator` — reglas FluentValidation: `Term` no vacío, cada valor de `SourceNames` en whitelist; ejecutado automáticamente por `ValidationPipelineBehavior` antes del handler
-- `[BE-INTERFACES]` `ListsController.Search` — controlador thin: crea `SearchRiskListsQuery(q, sources)`, despacha via `IMediator`, mapea respuesta con `ScrapingResponseMapper`; sujeto a rate limiting
-- `[BE-TEST]` Unit test: resultados de las tres fuentes combinados correctamente; fallo de una fuente no impide que las otras dos retornen resultados
+- `[BE-APP]` `SearchRiskListsQueryHandler.Handle(SearchRiskListsQuery, CancellationToken)` — selecciona fuentes por filtro `SourceNames` (o todas si null/vacío), llama instancias `IScrapingSource` en paralelo via `Task.WhenAll`, combina con `SearchResult.Merge(results)`, cachea cada resultado de fuente independientemente ✅ *(implementado en US-SCR-001)*
+- `[BE-DOMAIN]` `SearchResult.Merge(IEnumerable<SearchResult>)` — suma `Hits` y concatena listas `Entries` de todas las fuentes; sin deduplicación (una entidad presente en múltiples listas se cuenta múltiples veces — limitación conocida) ✅ *(implementado en US-SCR-001)*
+- `[BE-APP]` `SearchRiskListsQueryValidator` — reglas FluentValidation: `Term` no vacío, cada valor de `SourceNames` en whitelist; ejecutado automáticamente por `ValidationPipelineBehavior` antes del handler ✅ *(implementado en US-SCR-001)*
+- `[BE-INTERFACES]` `ListsController.Search` — controlador thin: crea `SearchRiskListsQuery(q, sources)`, despacha via `IMediator`, mapea respuesta con `ScrapingResponseMapper`; sujeto a rate limiting ✅ *(implementado en US-SCR-001)*
+- `[BE-TEST]` Unit test: resultados de las tres fuentes combinados correctamente; fallo de una fuente no impide que las otras dos retornen resultados ✅ *(cubierto por `SearchRiskListsQueryHandlerTests`)*
 
 #### Criterios de Aceptacion
 
@@ -277,7 +286,7 @@ Como desarrollador, necesito configurar la infraestructura del modulo de scrapin
 
 #### Tareas
 
-- `[BE-INFRA]` Tres registros de `HttpClient` tipados — cada uno con `Timeout` y header `User-Agent` configurados para su fuente objetivo
+- `[BE-INFRA]` Dos registros de `HttpClient` tipados (OFAC, World Bank) — cada uno con `Timeout` y header `User-Agent` configurados para su fuente objetivo; ICIJ usa `Microsoft.Playwright` en lugar de `HttpClient`
 - `[BE-INFRA]` Registro de `IMemoryCache` (si no esta ya registrado por Shared)
 - `[BE-INFRA]` Implementaciones de adaptadores `IScrapingSource` registrados como scoped (`OfacScrapingSource`, futuro: `WorldBankScrapingSource`, `IcijScrapingSource`)
 - `[BE-APP]` `SearchRiskListsQueryHandler` auto-descubierto por assembly scanning de MediatR; recibe `IEnumerable<IScrapingSource>` (todas las fuentes inyectadas via DI) e `IMemoryCache`
@@ -331,8 +340,8 @@ Integracion de fuentes adicionales (Sanciones UE, Consejo de Seguridad ONU, INTE
 | Ejecucion paralela | `SearchRiskListsQueryHandler` usa `Task.WhenAll` — todas las fuentes seleccionadas se consultan concurrentemente; la latencia total es la de la fuente mas lenta, no la suma |
 | Scraping OFAC | `OfacScrapingSource` orquesta el flujo GET → POST; `OfacHtmlParser` extrae datos del formulario y parsea la tabla HTML de resultados con `HtmlAgilityPack` |
 | Scraping Banco Mundial | Web scraping en dos pasos via `WorldBankHtmlParser` unificado: (1) `ExtractApiConfig()` scrapea tags `<script>` con `HtmlAgilityPack` para extraer URL del API + key, (2) `ParseResults()` deserializa JSON y filtra client-side (lógica OR en nombre, dirección, ciudad, estado, país, motivos); mapea "Ongoing"/"Permanent" a `toDate` |
-| Integracion ICIJ | API REST JSON; deserializacion con `System.Text.Json`; caption del nodo mapeado al campo `name` |
+| Scraping ICIJ | `IcijScrapingSource` usa `Microsoft.Playwright` (Chromium headless) con flags stealth para renderizar la SPA JavaScript de ICIJ; `IcijHtmlParser` parsea el HTML renderizado con `HtmlAgilityPack` extrayendo columnas Entity, Jurisdiction, Linked To, Data From |
 | Sin deduplicacion | `SearchResult.Merge` suma hits y concatena entradas; una entidad presente en multiples listas se cuenta multiples veces — limitacion conocida de v1.0 |
 | Uso entre modulos | `SearchRiskListsQueryHandler` es consumido via MediatR por `RunScreeningCommandHandler` en el modulo Suppliers; el modulo Scraping no tiene dependencia de Suppliers |
-| Infraestructura de tests | Patron Mother: `RiskEntryMother`, `SearchResultMother`, `OfacHtmlMother`; `FakeHttpMessageHandler` para simulación HTTP |
-| Estado de implementacion | Todas las historias US-SCR y TS-SCR-000 implementadas en v0.6.0 |
+| Infraestructura de tests | Patron Mother: `RiskEntryMother`, `SearchResultMother`, `OfacHtmlMother`, `WorldBankJsonMother`, `IcijHtmlMother`; `FakeHttpMessageHandler` para simulación HTTP |
+| Estado de implementacion | Todas las historias US-SCR y TS-SCR-000 implementadas. US-SCR-004 no requiere branch separado — "buscar en todas" esta integrado en `SearchRiskListsQueryHandler` (consulta todas las fuentes cuando `sources` se omite) |

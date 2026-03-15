@@ -152,30 +152,31 @@ Endpoint `GET /api/lists/search?q={term}&sources=worldbank` that scrapes the Wor
 
 ### US-SCR-003: Search the ICIJ Offshore Leaks database
 
-**Title:** Query the ICIJ Offshore Leaks JSON API
+**Title:** Scrape the ICIJ Offshore Leaks search page
 
 **Description:**
 As a compliance officer, I want to search the ICIJ Offshore Leaks database, so that I can identify suppliers linked to offshore entities named in the Panama Papers, Paradise Papers, or similar investigations.
 
 **Deliverable:**
-Endpoint `GET /api/lists/search?q={term}&sources=icij` that queries the ICIJ public JSON API, deserializes the `nodes` array, and returns a `ScrapingResponse`. Results are cached for 10 minutes per term.
+Endpoint `GET /api/lists/search?q={term}&sources=icij` that scrapes the ICIJ Offshore Leaks search page using `Microsoft.Playwright` (headless Chromium with anti-detection stealth flags) to render the JavaScript SPA, then parses the HTML results table with `HtmlAgilityPack`, and returns a `ScrapingResponse`. Results are cached for 10 minutes per term.
 
 **Dependencies:**
 - `US-SCR-001` (same infrastructure, same pattern)
 
-**Priority:** High | **Estimate:** 2 SP | **Status:** Updated (v0.6.0)
+**Priority:** High | **Estimate:** 2 SP | **Status:** Implemented (v0.7.0)
 
 #### Tasks
 
-- `[BE-INFRA]` `IcijScrapingSource` — adapter implementing `IScrapingSource`; fetches `https://offshoreleaks.icij.org/api/nodes?q={term}`, deserializes `nodes` array with `System.Text.Json` into internal `IcijNode` DTOs; maps to `RiskEntry` with:
+- `[BE-INFRA]` `IcijScrapingSource` — adapter implementing `IScrapingSource`; headless browser scraping via `Microsoft.Playwright` (Chromium): launches browser with anti-detection flags (`--disable-blink-features=AutomationControlled`, custom User-Agent, `navigator.webdriver = false`), navigates to search page, waits for table selector, extracts rendered HTML → parses via `IcijHtmlParser`; maps to `RiskEntry` with:
   - `ListSource = "ICIJ"`
-  - `Name` (node caption, fallback to name field)
+  - `Name` (entity name from table cell)
   - `Jurisdiction`, `LinkedTo`, `DataFrom`
   - All OFAC/World Bank fields remain `null`
-  - Returns `SearchResult.Empty` on failure
+  - Returns `SearchResult.Empty` on failure (browser launch error, timeout, CloudFront block)
+- `[BE-INFRA]` `IcijHtmlParser` — static helper that parses the rendered ICIJ HTML (from Playwright) with `HtmlAgilityPack`; extracts 4 columns: Entity (→ Name), Jurisdiction, Linked To (→ LinkedTo), Data From (→ DataFrom); decodes HTML entities and normalizes whitespace
 - `[BE-APP]` `SearchRiskListsQueryHandler` caches result by `scraping:icij:{term}` for 10 min (shared handler)
 - `[BE-INTERFACES]` `ListsController.Search` with `sources=icij` — requires `q`; subject to rate limiting
-- `[BE-TEST]` Unit test: nodes deserialized correctly with `name` field, empty `nodes` array returns empty
+- `[BE-TEST]` `IcijScrapingSourceTests` (14 tests) — uses `IcijHtmlMother` for HTML fixtures; covers entity field mapping, multiple results, HTML entity decoding, whitespace normalization, empty fields, WAF challenge, error scenarios (HTTP error, timeout, invalid HTML)
 
 #### Acceptance Criteria
 
@@ -187,12 +188,12 @@ Endpoint `GET /api/lists/search?q={term}&sources=icij` that queries the ICIJ pub
 - And each entry includes `listSource = "ICIJ"`, `name`, `jurisdiction`, `linkedTo`, `dataFrom`
 
 **Scenario 2: No matches**
-- Given the search term returns an empty `nodes` array from the ICIJ API
+- Given the search term returns no matches in the ICIJ search results table
 - When I send the request
 - Then I receive HTTP 200 with `{ hits: 0, entries: [] }`
 
 **Scenario 3: ICIJ API unavailable**
-- Given the ICIJ API is unreachable
+- Given the ICIJ website is unreachable or returns a WAF challenge
 - When I send the request
 - Then I receive HTTP 200 with `{ hits: 0, entries: [] }` (fault-tolerant)
 
@@ -216,15 +217,18 @@ Endpoint `GET /api/lists/search?q={term}` (no `sources` parameter, or `sources=o
 **Dependencies:**
 - `US-SCR-001`, `US-SCR-002`, `US-SCR-003`
 
-**Priority:** Critical | **Estimate:** 2 SP | **Status:** Updated (v0.6.0 - CQRS Handler)
+**Priority:** Critical | **Estimate:** 2 SP | **Status:** Implemented (no separate branch — built into `SearchRiskListsQueryHandler` from US-SCR-001)
+
+**Implementation Note:**
+This story does not require a dedicated `feature/us-scr-004-search-all-lists` branch. The "search all" behavior is inherent to the `SearchRiskListsQueryHandler` design: when the `sources` parameter is omitted or empty, the handler queries all registered `IScrapingSource` instances in parallel via `Task.WhenAll`. The handler, merge logic, validator, and controller were all implemented as part of `US-SCR-001`.
 
 #### Tasks
 
-- `[BE-APP]` `SearchRiskListsQueryHandler.Handle(SearchRiskListsQuery, CancellationToken)` — selects sources by `SourceNames` filter (or all if null/empty), calls `IScrapingSource` instances in parallel via `Task.WhenAll`, merges with `SearchResult.Merge(results)`, caches each source result independently
-- `[BE-DOMAIN]` `SearchResult.Merge(IEnumerable<SearchResult>)` — sums `Hits` and concatenates `Entries` lists from all sources; no deduplication (an entity present in multiple lists is counted multiple times — known limitation)
-- `[BE-APP]` `SearchRiskListsQueryValidator` — FluentValidation rules: `Term` not empty, each `SourceNames` value in whitelist; auto-executed by `ValidationPipelineBehavior` before handler
-- `[BE-INTERFACES]` `ListsController.Search` — thin controller: creates `SearchRiskListsQuery(q, sources)`, dispatches via `IMediator`, maps response with `ScrapingResponseMapper`; subject to rate limiting
-- `[BE-TEST]` Unit test: results from all three sources merged correctly; one source failing does not prevent the other two from returning results
+- `[BE-APP]` `SearchRiskListsQueryHandler.Handle(SearchRiskListsQuery, CancellationToken)` — selects sources by `SourceNames` filter (or all if null/empty), calls `IScrapingSource` instances in parallel via `Task.WhenAll`, merges with `SearchResult.Merge(results)`, caches each source result independently ✅ *(implemented in US-SCR-001)*
+- `[BE-DOMAIN]` `SearchResult.Merge(IEnumerable<SearchResult>)` — sums `Hits` and concatenates `Entries` lists from all sources; no deduplication (an entity present in multiple lists is counted multiple times — known limitation) ✅ *(implemented in US-SCR-001)*
+- `[BE-APP]` `SearchRiskListsQueryValidator` — FluentValidation rules: `Term` not empty, each `SourceNames` value in whitelist; auto-executed by `ValidationPipelineBehavior` before handler ✅ *(implemented in US-SCR-001)*
+- `[BE-INTERFACES]` `ListsController.Search` — thin controller: creates `SearchRiskListsQuery(q, sources)`, dispatches via `IMediator`, maps response with `ScrapingResponseMapper`; subject to rate limiting ✅ *(implemented in US-SCR-001)*
+- `[BE-TEST]` Unit test: results from all three sources merged correctly; one source failing does not prevent the other two from returning results ✅ *(covered by `SearchRiskListsQueryHandlerTests`)*
 
 #### Acceptance Criteria
 
@@ -282,7 +286,7 @@ As a developer, I need to configure the scraping module's infrastructure — typ
 
 #### Tasks
 
-- `[BE-INFRA]` Three typed `HttpClient` registrations — each with `Timeout` and `User-Agent` header configured for its target source
+- `[BE-INFRA]` Two typed `HttpClient` registrations (OFAC, World Bank) — each with `Timeout` and `User-Agent` header configured for its target source; ICIJ uses `Microsoft.Playwright` instead of `HttpClient`
 - `[BE-INFRA]` `IMemoryCache` registration (if not already registered by Shared)
 - `[BE-INFRA]` `IScrapingSource` adapter implementations registered as scoped (`OfacScrapingSource`, future: `WorldBankScrapingSource`, `IcijScrapingSource`)
 - `[BE-APP]` `SearchRiskListsQueryHandler` auto-discovered by MediatR assembly scanning; receives `IEnumerable<IScrapingSource>` (all sources injected via DI) and `IMemoryCache`
@@ -336,8 +340,8 @@ Integrate additional sources (EU Sanctions, UN Security Council, INTERPOL). The 
 | Parallel execution | `SearchRiskListsQueryHandler` uses `Task.WhenAll` — all selected sources queried concurrently; total latency = slowest source, not the sum |
 | OFAC scraping | `OfacScrapingSource` orchestrates GET → POST flow; `OfacHtmlParser` extracts form data and parses HTML results table with `HtmlAgilityPack` |
 | World Bank scraping | Two-step web scraping via unified `WorldBankHtmlParser`: (1) `ExtractApiConfig()` scrapes `<script>` tags with `HtmlAgilityPack` to extract API URL + key, (2) `ParseResults()` deserializes JSON and filters client-side (OR logic across name, address, city, state, country, grounds); maps "Ongoing"/"Permanent" to `toDate` |
-| ICIJ integration | REST JSON API; deserialization with `System.Text.Json`; entity caption mapped to `name` field |
+| ICIJ scraping | `IcijScrapingSource` uses `Microsoft.Playwright` (headless Chromium) with stealth flags to render the ICIJ JavaScript SPA; `IcijHtmlParser` parses the rendered HTML with `HtmlAgilityPack` extracting Entity, Jurisdiction, Linked To, Data From columns |
 | No deduplication | `SearchResult.Merge` sums hits and concatenates entries; an entity present in multiple lists is counted multiple times — known v1.0 limitation |
 | Cross-module usage | `SearchRiskListsQueryHandler` is consumed via MediatR by `RunScreeningCommandHandler` in the Suppliers module; the Scraping module has no dependency on Suppliers |
-| Test infrastructure | Mother pattern: `RiskEntryMother`, `SearchResultMother`, `OfacHtmlMother`; `FakeHttpMessageHandler` for HTTP simulation |
-| Implementation status | All US-SCR stories and TS-SCR-000 implemented in v0.6.0 |
+| Test infrastructure | Mother pattern: `RiskEntryMother`, `SearchResultMother`, `OfacHtmlMother`, `WorldBankJsonMother`, `IcijHtmlMother`; `FakeHttpMessageHandler` for HTTP simulation |
+| Implementation status | All US-SCR stories and TS-SCR-000 implemented. US-SCR-004 does not require a separate branch — "search all" is built into `SearchRiskListsQueryHandler` (queries all sources when `sources` is omitted) |

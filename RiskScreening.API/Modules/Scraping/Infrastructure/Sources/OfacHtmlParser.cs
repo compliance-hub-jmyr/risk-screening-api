@@ -134,20 +134,20 @@ internal static partial class OfacHtmlParser
                     .ToArray();
 
             entries.Add(new RiskEntry(
-                ListSource: "OFAC",
-                Name: NullIfEmpty(name),
-                Address: NullIfEmpty(address),
-                Type: NullIfEmpty(type),
-                List: NullIfEmpty(list),
-                Programs: programsArray,
-                Score: score,
-                Country: null,
-                FromDate: null,
-                ToDate: null,
-                Grounds: null,
-                Jurisdiction: null,
-                LinkedTo: null,
-                DataFrom: null));
+                "OFAC",
+                NullIfEmpty(name),
+                NullIfEmpty(address),
+                NullIfEmpty(type),
+                NullIfEmpty(list),
+                programsArray,
+                score,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null));
         }
 
         return entries;
@@ -166,8 +166,10 @@ internal static partial class OfacHtmlParser
     }
 
     /// <summary>Returns <c>null</c> when the string is empty or whitespace-only.</summary>
-    private static string? NullIfEmpty(string value) =>
-        string.IsNullOrWhiteSpace(value) ? null : value;
+    private static string? NullIfEmpty(string value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value;
+    }
 
     [GeneratedRegex(@"\s+")]
     private static partial Regex WhitespaceRegex();

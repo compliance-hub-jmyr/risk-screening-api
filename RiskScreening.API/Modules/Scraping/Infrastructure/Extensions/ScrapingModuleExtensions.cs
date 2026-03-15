@@ -6,7 +6,7 @@ namespace RiskScreening.API.Modules.Scraping.Infrastructure.Extensions;
 /// <summary>
 ///     Registers Scraping module infrastructure:
 ///     <list type="bullet">
-///         <item>Three typed <c>HttpClient</c> instances (OFAC, World Bank, ICIJ) via <c>IHttpClientFactory</c></item>
+///         <item>Typed <c>HttpClient</c> instances (OFAC, World Bank) via <c>IHttpClientFactory</c></item>
 ///         <item><c>IMemoryCache</c> for on-demand scraping result caching</item>
 ///         <item>Scraping source adapters (<see cref="IScrapingSource"/> implementations)</item>
 ///     </list>
@@ -46,12 +46,8 @@ public static class ScrapingModuleExtensions
             client.DefaultRequestHeaders.Add("Accept-Language", "en-US,en;q=0.9");
         });
 
-        builder.Services.AddHttpClient("Icij", client =>
-        {
-            client.BaseAddress = new Uri("https://offshoreleaks.icij.org/");
-            client.Timeout = TimeSpan.FromSeconds(15);
-            client.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
-        });
+        // ICIJ uses Playwright (headless Chromium) instead of HttpClient
+        // because the search page is a JavaScript SPA protected by CloudFront.
 
         // Caching
 
@@ -61,5 +57,6 @@ public static class ScrapingModuleExtensions
 
         builder.Services.AddScoped<IScrapingSource, OfacScrapingSource>();
         builder.Services.AddScoped<IScrapingSource, WorldBankScrapingSource>();
+        builder.Services.AddScoped<IScrapingSource, IcijScrapingSource>();
     }
 }

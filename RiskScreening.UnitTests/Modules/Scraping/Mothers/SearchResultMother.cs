@@ -19,6 +19,11 @@ public static class SearchResultMother
             .Select(_ => RiskEntryMother.WorldBank())
             .ToList());
 
+    public static SearchResult WithIcijEntries(int count = 1) =>
+        new(count, Enumerable.Range(0, count)
+            .Select(_ => RiskEntryMother.Icij())
+            .ToList());
+
     public static SearchResult WithEntries(params RiskEntry[] entries) =>
         new(entries.Length, entries.ToList());
 }

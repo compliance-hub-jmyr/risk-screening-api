@@ -11,7 +11,7 @@
 El módulo Scraping requiere obtener datos de tres fuentes externas:
 1. **OFAC SDN** — US Treasury Sanctions List Search (formulario web en `https://sanctionssearch.ofac.treas.gov/`)
 2. **World Bank Debarred Firms** — Grid Kendo UI en `https://projects.worldbank.org/en/projects-operations/procurement/debarred-firms` (carga datos dinámicamente via AJAX; filtrado client-side)
-3. **ICIJ Offshore Leaks** — API REST pública (búsqueda por consulta; sin descarga completa del dataset)
+3. **ICIJ Offshore Leaks** — SPA JavaScript en `https://offshoreleaks.icij.org/` protegida por AWS CloudFront WAF; requiere renderizado con headless browser
 
 Se evaluaron dos estrategias de obtención de datos:
 
@@ -71,10 +71,22 @@ Este enfoque es más simple de implementar y operar en la Fase 1, evita la compl
 - **Timeout del cliente HTTP**: 45 segundos (aumentado — dos requests HTTP)
 
 #### ICIJ Offshore Leaks
-- Fuente: `https://offshoreleaks.icij.org/api/nodes?q={consulta}` (API REST pública)
-- Método: HTTP GET — búsqueda en tiempo real por consulta; la API pública soporta búsqueda por consulta de forma nativa
-- Clave de cache: `scraping:icij:{consultaNormalizada}`
-- TTL: **10 minutos**
+- **Referencia del assessment**: `https://offshoreleaks.icij.org/` (SPA JavaScript — resultados renderizados client-side, protegida por AWS CloudFront WAF)
+- **Método**: Scraping con headless browser via `Microsoft.Playwright` (Chromium) + `HtmlAgilityPack` para parsing HTML
+  1. `IcijScrapingSource` (adaptador) lanza una instancia headless de Chromium con flags anti-detección (`--disable-blink-features=AutomationControlled`, User-Agent personalizado, `navigator.webdriver = false`) para bypasear la protección de bots de CloudFront
+  2. Navega a `/search?q={term}&c=&j=&d=` y espera `NetworkIdle` + el selector de la tabla de resultados (`table.table tbody tr`)
+  3. Extrae el HTML completamente renderizado y lo pasa a `IcijHtmlParser`
+  4. `IcijHtmlParser` (helper estático) parsea la tabla HTML de resultados con `HtmlAgilityPack`:
+     - Localiza `<table class="table">` → `<tbody>` → `<tr>` filas
+     - Extrae 4 columnas: Entity (→ `Name`), Jurisdiction, Linked To (→ `LinkedTo`), Data From (→ `DataFrom`)
+     - Decodifica entidades HTML y normaliza espacios en blanco
+  5. Campos extraídos: Name, Jurisdiction, LinkedTo, DataFrom
+- **¿Por qué Playwright?** El sitio web de ICIJ migró a una SPA JavaScript que retorna HTTP 202 con body vacío para requests del lado del servidor. `HtmlAgilityPack` solo no puede ejecutar JavaScript. Además, CloudFront WAF bloquea firmas estándar de headless browsers — Playwright con configuración stealth bypasea esta protección.
+- **Arquitectura**: Mismo patrón Ports & Adapters que OFAC — puerto `IScrapingSource`, adaptador `IcijScrapingSource` en `Infrastructure/Sources/`
+- **Nota**: A diferencia de OFAC y World Bank, ICIJ no usa `IHttpClientFactory` — Playwright gestiona su propio ciclo de vida del browser dentro de cada llamada a `SearchAsync`.
+- **Clave de cache**: `scraping:icij:{consultaNormalizada}`
+- **TTL**: **10 minutos**
+- **Timeout del browser**: 30 segundos (navegación de página) + 10 segundos (espera del selector de tabla)
 
 ### Manejo de errores (tolerante a fallos)
 
@@ -110,7 +122,8 @@ Si un fetch en vivo falla (timeout, error HTTP, error de parsing):
 
 | Paquete | Versión | Propósito |
 |---------|---------|-----------|
-| `HtmlAgilityPack` | 1.11.71 | Parsing HTML para OFAC (formulario + tabla de resultados) y World Bank (extracción de JavaScript) |
+| `HtmlAgilityPack` | 1.11.71 | Parsing HTML para OFAC (formulario + tabla de resultados), World Bank (extracción de JavaScript) e ICIJ (parsing del DOM renderizado) |
+| `Microsoft.Playwright` | 1.58.0 | Chromium headless para renderizado de SPA ICIJ (bypasea detección de bots de CloudFront WAF) |
 | `System.Text.Json` | .NET 10 | Deserialización JSON para respuestas de la API de World Bank |
 | `Microsoft.Extensions.Http` | .NET 10 | `HttpClientFactory` para clientes tipados |
 | `Polly` | 8.x (futuro) | Políticas de retry y timeout para solicitudes HTTP |
@@ -119,5 +132,6 @@ Si un fetch en vivo falla (timeout, error HTTP, error de parsing):
 - [Descargas de la Lista SDN de OFAC](https://www.treasury.gov/resource-center/sanctions/SDN-List/Pages/default.aspx)
 - [API de ICIJ Offshore Leaks](https://offshoreleaks.icij.org/api)
 - [HtmlAgilityPack](https://html-agility-pack.net/)
+- [Microsoft.Playwright para .NET](https://playwright.dev/dotnet/)
 - [Polly — Librería de Resiliencia .NET](https://github.com/App-vNext/Polly)
 - ADR-0008 — Tecnología de cache: IMemoryCache (Fase 1)
