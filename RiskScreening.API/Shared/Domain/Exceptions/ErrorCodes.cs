@@ -155,6 +155,13 @@ public static class ErrorCodes
     public const string RequiredSeedDataMissingCode = "REQUIRED_SEED_DATA_MISSING";
 
     // =====================================================================
+    // RATE LIMITING ERRORS (7000–7999)
+    // =====================================================================
+
+    public const int RateLimitExceeded = 7000;
+    public const string RateLimitExceededCode = "RATE_LIMIT_EXCEEDED";
+
+    // =====================================================================
     // GENERIC ERRORS (9000–9999)
     // =====================================================================
 
