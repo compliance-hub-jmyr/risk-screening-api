@@ -53,7 +53,6 @@ erDiagram
         nvarchar_500  address "NULLABLE"
         nvarchar_100  country "NOT NULL"
         decimal_18_2  annual_billing_usd "NULLABLE — CHECK >= 0"
-        nvarchar_100  industry "NULLABLE"
         nvarchar_10   risk_level "NOT NULL DEFAULT 'NONE' — NONE | LOW | MEDIUM | HIGH"
         nvarchar_20   status "NOT NULL DEFAULT 'PENDING' — PENDING | APPROVED | REJECTED | UNDER_REVIEW"
         bit           is_deleted "NOT NULL DEFAULT 0"
@@ -72,7 +71,6 @@ erDiagram
         nvarchar_10  risk_level "NOT NULL DEFAULT 'NONE' — NONE | LOW | MEDIUM | HIGH"
         int          total_matches "NOT NULL DEFAULT 0"
         nvarchar_max entries_json "NULLABLE — lista serializada de RiskEntry"
-        nvarchar_max notes "NULLABLE"
         datetime2    created_at "DEFAULT GETUTCDATE()"
         nvarchar_255 created_by "NULLABLE"
     }
@@ -154,7 +152,6 @@ El borrado lógico usa `is_deleted = 1` — independiente del `status` de negoci
 | `address` | `NVARCHAR(500)` | Sí | — | Dirección registrada |
 | `country` | `NVARCHAR(100)` | No | — | País de registro |
 | `annual_billing_usd` | `DECIMAL(18,2)` | Sí | CHECK `>= 0` | Facturación anual en dólares |
-| `industry` | `NVARCHAR(100)` | Sí | — | Sector industrial |
 | `risk_level` | `NVARCHAR(10)` | No | CHECK, DEFAULT `'NONE'` | `NONE` \| `LOW` \| `MEDIUM` \| `HIGH` |
 | `status` | `NVARCHAR(20)` | No | CHECK, DEFAULT `'PENDING'` | `PENDING` \| `APPROVED` \| `REJECTED` \| `UNDER_REVIEW` |
 | `is_deleted` | `BIT` | No | DEFAULT `0` | Flag de borrado lógico — independiente del estado de compliance |
@@ -182,7 +179,6 @@ Almacena el resultado de cada ejecución de screening para un proveedor.
 | `risk_level` | `NVARCHAR(10)` | No | CHECK, DEFAULT `'NONE'` | `NONE` \| `LOW` \| `MEDIUM` \| `HIGH` |
 | `total_matches` | `INT` | No | DEFAULT `0` | Total de coincidencias en todas las fuentes |
 | `entries_json` | `NVARCHAR(MAX)` | Sí | — | Array JSON serializado de objetos `RiskEntry` coincidentes |
-| `notes` | `NVARCHAR(MAX)` | Sí | — | Notas opcionales del analista |
 | `created_at` | `DATETIME2` | No | DEFAULT `GETUTCDATE()` | |
 | `created_by` | `NVARCHAR(255)` | Sí | — | Username del claim JWT |
 

@@ -44,6 +44,33 @@ public static class ErrorCodes
     public const int InvalidPassword = 1103;
     public const string InvalidPasswordCode = "INVALID_PASSWORD";
 
+    public const int InvalidCountryCode = 1104;
+    public const string InvalidCountryCodeCode = "INVALID_COUNTRY_CODE";
+
+    public const int InvalidPhoneNumber = 1105;
+    public const string InvalidPhoneNumberCode = "INVALID_PHONE_NUMBER";
+
+    public const int InvalidWebsiteUrl = 1106;
+    public const string InvalidWebsiteUrlCode = "INVALID_WEBSITE_URL";
+
+    public const int InvalidTaxId = 1107;
+    public const string InvalidTaxIdCode = "INVALID_TAX_ID";
+
+    public const int InvalidLegalName = 1108;
+    public const string InvalidLegalNameCode = "INVALID_LEGAL_NAME";
+
+    public const int InvalidCommercialName = 1109;
+    public const string InvalidCommercialNameCode = "INVALID_COMMERCIAL_NAME";
+
+    public const int InvalidSupplierAddress = 1110;
+    public const string InvalidSupplierAddressCode = "INVALID_SUPPLIER_ADDRESS";
+
+    public const int InvalidAnnualBilling = 1111;
+    public const string InvalidAnnualBillingCode = "INVALID_ANNUAL_BILLING";
+
+    public const int InvalidSupplierId = 1112;
+    public const string InvalidSupplierIdCode = "INVALID_SUPPLIER_ID";
+
     // =====================================================================
     // AUTHENTICATION ERRORS (2000–2999)
     // =====================================================================
@@ -83,9 +110,11 @@ public static class ErrorCodes
     public const int EntityNotFound = 4000;
     public const string EntityNotFoundCode = "ENTITY_NOT_FOUND";
 
-    // Add domain-specific not-found codes here as your modules grow:
-    // public const int RiskScreeningNotFound = 4001;
-    // public const string RiskScreeningNotFoundCode = "RISK_SCREENING_NOT_FOUND";
+    public const int SupplierNotFound = 4001;
+    public const string SupplierNotFoundCode = "SUPPLIER_NOT_FOUND";
+
+    public const int ScreeningResultNotFound = 4002;
+    public const string ScreeningResultNotFoundCode = "SCREENING_RESULT_NOT_FOUND";
 
     // =====================================================================
     // BUSINESS RULE VIOLATIONS (5000–5999)
@@ -99,6 +128,15 @@ public static class ErrorCodes
 
     public const int InvalidOperation = 5002;
     public const string InvalidOperationCode = "INVALID_OPERATION";
+
+    public const int SupplierTaxIdAlreadyExists = 5003;
+    public const string SupplierTaxIdAlreadyExistsCode = "SUPPLIER_TAX_ID_ALREADY_EXISTS";
+
+    public const int InvalidSupplierState = 5004;
+    public const string InvalidSupplierStateCode = "INVALID_SUPPLIER_STATE";
+
+    public const int SupplierAlreadyDeleted = 5005;
+    public const string SupplierAlreadyDeletedCode = "SUPPLIER_ALREADY_DELETED";
 
     // =====================================================================
     // INFRASTRUCTURE ERRORS (6000–6999)

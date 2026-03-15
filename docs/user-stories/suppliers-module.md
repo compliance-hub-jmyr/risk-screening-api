@@ -37,7 +37,6 @@ SQL migration scripts V005–V006, EF Core configurations for `Supplier` and `Sc
   - `address` NVARCHAR(500) NULL *(dirección física)*
   - `country` NVARCHAR(100) NOT NULL
   - `annual_billing_usd` DECIMAL(18, 2) NULL *(facturación anual en dólares)*
-  - `industry` NVARCHAR(100) NULL
   - `risk_level` NVARCHAR(10) NOT NULL DEFAULT 'NONE' CHECK (NONE/LOW/MEDIUM/HIGH)
   - `status` NVARCHAR(20) NOT NULL DEFAULT 'PENDING' CHECK (PENDING/APPROVED/REJECTED/UNDER_REVIEW)
   - `is_deleted` BIT NOT NULL DEFAULT 0 *(soft-delete flag — independiente del status de negocio)*
@@ -54,7 +53,6 @@ SQL migration scripts V005–V006, EF Core configurations for `Supplier` and `Sc
   - `risk_level` NVARCHAR(10) NOT NULL DEFAULT 'NONE' CHECK (NONE/LOW/MEDIUM/HIGH)
   - `total_matches` INT NOT NULL DEFAULT 0
   - `entries_json` NVARCHAR(MAX) NULL *(serialización JSON de los RiskEntry coincidentes)*
-  - `notes` NVARCHAR(MAX) NULL
   - `created_at` DATETIME2 NOT NULL DEFAULT GETUTCDATE()
   - Indexes: `IX_screening_results_supplier_id`, `IX_screening_results_screened_at DESC`, `IX_screening_results_risk_level`
   - **Sin `updated_at`** — los resultados de screening son inmutables tras su creación
@@ -96,7 +94,7 @@ Endpoint `POST /api/suppliers` que valida la solicitud, verifica duplicado de `T
 
 #### Tasks
 
-- `[BE-DOMAIN]` `Supplier` aggregate con factory method `Create(legalName, commercialName, taxId, country, contactPhone?, contactEmail?, website?, address?, annualBillingUsd?, industry?, notes?)` — inicializa `Status = PENDING`, `RiskLevel = NONE`, `IsDeleted = false`
+- `[BE-DOMAIN]` `Supplier` aggregate con factory method `Create(legalName, commercialName, taxId, country, contactPhone?, contactEmail?, website?, address?, annualBillingUsd?, notes?)` — inicializa `Status = PENDING`, `RiskLevel = NONE`, `IsDeleted = false`
 - `[BE-DOMAIN]` Value rules en `Create`:
   - `LegalName` ≤ 200, required
   - `CommercialName` ≤ 200, required
@@ -171,7 +169,7 @@ Endpoint `GET /api/suppliers` retornando lista paginada y ordenada de proveedore
 - Given I am authenticated and suppliers exist
 - When I call `GET /api/suppliers?page=0&size=10`
 - Then I receive HTTP 200 with `{ content: [...], page: { number, size, totalElements, totalPages } }`
-- And each entry includes `{ id, legalName, commercialName, taxId, country, industry, contactEmail, contactPhone, website, annualBillingUsd, riskLevel, status, updatedAt, createdAt }`
+- And each entry includes `{ id, legalName, commercialName, taxId, country, contactEmail, contactPhone, website, annualBillingUsd, riskLevel, status, updatedAt, createdAt }`
 - And soft-deleted suppliers (`isDeleted = true`) are NOT included
 - And results are ordered by `updatedAt` descending by default
 
@@ -244,7 +242,7 @@ Endpoint `PUT /api/suppliers/{supplierId}` que actualiza todos los campos mutabl
 
 #### Tasks
 
-- `[BE-DOMAIN]` Método `Supplier.Update(legalName, commercialName, country, contactPhone?, contactEmail?, website?, address?, annualBillingUsd?, industry?, notes?)` — aplica nuevos valores, guard `EnsureNotDeleted()` verifica `IsDeleted = false`
+- `[BE-DOMAIN]` Método `Supplier.Update(legalName, commercialName, country, contactPhone?, contactEmail?, website?, address?, annualBillingUsd?, notes?)` — aplica nuevos valores, guard `EnsureNotDeleted()` verifica `IsDeleted = false`
 - `[BE-APP]` `UpdateSupplierCommand` + `UpdateSupplierCommandHandler` — carga supplier, llama `Update`, commits
 - `[BE-APP]` `UpdateSupplierCommandValidator` (FluentValidation — mismas reglas que Create, más Id required)
 - `[BE-INTERFACES]` `SuppliersController.Update` — retorna 204 No Content
@@ -344,7 +342,7 @@ Endpoint `POST /api/suppliers/{supplierId}/screenings` que acepta un listado opc
 #### Tasks
 
 - `[BE-DOMAIN]` Método `Supplier.ApplyScreeningResult(RiskLevel)` — actualiza `RiskLevel`, establece `Status = UNDER_REVIEW` si `riskLevel = HIGH`
-- `[BE-DOMAIN]` `ScreeningResult` aggregate con factory `ScreeningResult.Create(supplierId, sourcesQueried, riskLevel, totalMatches, entries, notes?)` — inmutable tras creación; `entries` se serializa como JSON en `EntriesJson`
+- `[BE-DOMAIN]` `ScreeningResult` aggregate con factory `ScreeningResult.Create(supplierId, sourcesQueried, riskLevel, totalMatches, entries)` — inmutable tras creación; `entries` se serializa como JSON en `EntriesJson`
 - `[BE-DOMAIN]` `ScreeningResultNotFoundException` (extends `EntityNotFoundException`)
 - `[BE-APP]` `RunScreeningCommand` — campos: `SupplierId`, `Sources` (opcional `IReadOnlyList<string>?`; valores válidos: `"ofac"`, `"worldbank"`, `"icij"`; si null → todas)
 - `[BE-APP]` `RunScreeningCommandHandler`:
@@ -444,7 +442,7 @@ Endpoint `GET /api/screenings?supplierId={supplierId}` retornando lista paginada
 - Given I am authenticated and at least one screening has been run for the supplier
 - When I call `GET /api/screenings?supplierId={supplierId}&page=0&size=10`
 - Then I receive HTTP 200 with a paginated list ordered by `screenedAt` descending
-- And each summary entry includes `{ id, supplierId, sourcesQueried, screenedAt, riskLevel, totalMatches, notes, createdAt }` **without** `entries`
+- And each summary entry includes `{ id, supplierId, sourcesQueried, screenedAt, riskLevel, totalMatches, createdAt }` **without** `entries`
 
 **Scenario 2: No screenings yet**
 - Given the supplier exists but has no screening history
@@ -479,7 +477,7 @@ Endpoint `GET /api/screenings/{screeningId}` retornando el screening result comp
 **Scenario 1: Result found with entries**
 - Given I am authenticated and the screeningId exists
 - When I call `GET /api/screenings/{screeningId}`
-- Then I receive HTTP 200 with `{ id, supplierId, sourcesQueried, screenedAt, riskLevel, totalMatches, notes, createdAt, entries: [...] }`
+- Then I receive HTTP 200 with `{ id, supplierId, sourcesQueried, screenedAt, riskLevel, totalMatches, createdAt, entries: [...] }`
 - And `entries` is the deserialized list of `RiskEntry` objects with their source-specific fields
 
 **Scenario 2: Result not found**

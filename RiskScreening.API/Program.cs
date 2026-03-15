@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using RiskScreening.API.Modules.IAM.Infrastructure.Extensions;
+using RiskScreening.API.Modules.Suppliers.Infrastructure.Extensions;
 using RiskScreening.API.Shared.Infrastructure.Documentation.OpenApi.Extensions;
 using RiskScreening.API.Shared.Infrastructure.Extensions;
 using RiskScreening.API.Shared.Infrastructure.Interfaces;
@@ -42,10 +43,10 @@ builder.AddSharedInfrastructure();
 builder.AddIamModule();
 
 /*// Scraping module: HTTP clients, IMemoryCache, rate limiting
-builder.AddScrapingModule();
+builder.AddScrapingModule();*/
 
 // Suppliers module: repositories, EF configurations
-builder.AddSuppliersModule();*/
+builder.AddSuppliersModule();
 
 // Entity Framework Core with SQL Server
 // Reads connection string from app settings.{Environment}.json

@@ -53,7 +53,6 @@ erDiagram
         nvarchar_500  address "NULLABLE"
         nvarchar_100  country "NOT NULL"
         decimal_18_2  annual_billing_usd "NULLABLE — CHECK >= 0"
-        nvarchar_100  industry "NULLABLE"
         nvarchar_10   risk_level "NOT NULL DEFAULT 'NONE' — NONE | LOW | MEDIUM | HIGH"
         nvarchar_20   status "NOT NULL DEFAULT 'PENDING' — PENDING | APPROVED | REJECTED | UNDER_REVIEW"
         bit           is_deleted "NOT NULL DEFAULT 0"
@@ -72,7 +71,6 @@ erDiagram
         nvarchar_10  risk_level "NOT NULL DEFAULT 'NONE' — NONE | LOW | MEDIUM | HIGH"
         int          total_matches "NOT NULL DEFAULT 0"
         nvarchar_max entries_json "NULLABLE — serialized RiskEntry list"
-        nvarchar_max notes "NULLABLE"
         datetime2    created_at "DEFAULT GETUTCDATE()"
         nvarchar_255 created_by "NULLABLE"
     }
@@ -154,7 +152,6 @@ Soft-delete uses `is_deleted = 1` — independent of the business workflow `stat
 | `address` | `NVARCHAR(500)` | Yes | — | Registered address |
 | `country` | `NVARCHAR(100)` | No | — | Country of registration |
 | `annual_billing_usd` | `DECIMAL(18,2)` | Yes | CHECK `>= 0` | Annual billing in USD |
-| `industry` | `NVARCHAR(100)` | Yes | — | Industry sector |
 | `risk_level` | `NVARCHAR(10)` | No | CHECK, DEFAULT `'NONE'` | `NONE` \| `LOW` \| `MEDIUM` \| `HIGH` |
 | `status` | `NVARCHAR(20)` | No | CHECK, DEFAULT `'PENDING'` | `PENDING` \| `APPROVED` \| `REJECTED` \| `UNDER_REVIEW` |
 | `is_deleted` | `BIT` | No | DEFAULT `0` | Soft-delete flag — independent of compliance status |
@@ -182,7 +179,6 @@ Stores the outcome of each screening run for a supplier.
 | `risk_level` | `NVARCHAR(10)` | No | CHECK, DEFAULT `'NONE'` | `NONE` \| `LOW` \| `MEDIUM` \| `HIGH` |
 | `total_matches` | `INT` | No | DEFAULT `0` | Total matches found across all sources |
 | `entries_json` | `NVARCHAR(MAX)` | Yes | — | Serialized JSON array of matched `RiskEntry` objects |
-| `notes` | `NVARCHAR(MAX)` | Yes | — | Optional analyst notes |
 | `created_at` | `DATETIME2` | No | DEFAULT `GETUTCDATE()` | |
 | `created_by` | `NVARCHAR(255)` | Yes | — | Username from JWT claim |
 

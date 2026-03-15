@@ -622,7 +622,6 @@ classDiagram
         +string CommercialName
         +string TaxId
         +string Country
-        +string? Industry
         +string? ContactEmail
         +string? ContactPhone
         +string? Website
@@ -649,8 +648,7 @@ classDiagram
         +RiskLevel RiskLevel
         +int TotalMatches
         +string? EntriesJson
-        +string? Notes
-        +Create(supplierId, sourcesQueried, riskLevel, totalMatches, entries, notes) ScreeningResult
+        +Create(supplierId, sourcesQueried, riskLevel, totalMatches, entries) ScreeningResult
     }
 
     class RiskLevel {
