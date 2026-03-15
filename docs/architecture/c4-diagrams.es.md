@@ -97,8 +97,8 @@ C4Component
             Component(listCtrl, "ListsController", "ASP.NET Controller", "GET /lists/ofac — /lists/worldbank — /lists/icij — /lists/all. Requiere Bearer JWT.")
             Component(rateLimitMW, "RateLimiterMiddleware", "ASP.NET Middleware", "Sliding window 20 req/min particionado por IP del cliente. Retorna 429 si se excede.")
             Component(orchSvc, "ScrapingOrchestrationService", "Infrastructure Service", "SearchSourceAsync(source, term) — fuente individual. SearchAllAsync(term) — paralelo en todas las fuentes. Resultados cacheados en IMemoryCache.")
-            Component(ofacSrc, "OfacScrapingSource", "IScrapingSource", "Descarga y parsea sdn.xml de treasury.gov. SourceName = OFAC.")
-            Component(wbSrc, "WorldBankScrapingSource", "IScrapingSource", "Scrape tabla HTML de World Bank con HtmlAgilityPack. SourceName = WORLD_BANK.")
+            Component(ofacSrc, "OfacScrapingSource", "IScrapingSource", "Web scraping del formulario OFAC en sanctionssearch.ofac.treas.gov con HtmlAgilityPack (GET pagina + POST formulario). SourceName = OFAC.")
+            Component(wbSrc, "WorldBankScrapingSource", "IScrapingSource", "Scrapea pagina HTML de World Bank con HtmlAgilityPack para extraer config del API, luego obtiene API JSON. SourceName = WORLD_BANK.")
             Component(icijSrc, "IcijScrapingSource", "IScrapingSource", "Consulta /api/nodes de offshoreleaks.icij.org. SourceName = ICIJ.")
         }
 
