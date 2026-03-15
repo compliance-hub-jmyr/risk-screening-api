@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using RiskScreening.API.Modules.Suppliers.Interfaces.REST.Resources.Requests;
 using RiskScreening.API.Modules.Suppliers.Interfaces.REST.Resources.Responses;
+using RiskScreening.API.Shared.Interfaces.REST.Resources;
 using Swashbuckle.AspNetCore.Annotations;
 
 namespace RiskScreening.API.Modules.Suppliers.Interfaces.REST.Documentation;
@@ -20,4 +21,21 @@ public interface ISuppliersController
     [SwaggerResponse(StatusCodes.Status400BadRequest, "Validation error.")]
     [SwaggerResponse(StatusCodes.Status409Conflict, "Tax ID already exists.")]
     Task<IActionResult> Create([FromBody] CreateSupplierRequest request, CancellationToken ct);
+
+    /// <summary>Get all suppliers with optional filters, sorting, and pagination.</summary>
+    [SwaggerOperation(Summary = "List suppliers", Tags = ["Suppliers"])]
+    [SwaggerResponse(StatusCodes.Status200OK, "Paginated list of suppliers.",
+        typeof(PageResponse<SupplierResponse>))]
+    Task<IActionResult> GetAll(
+        [FromQuery] string? legalName,
+        [FromQuery] string? commercialName,
+        [FromQuery] string? taxId,
+        [FromQuery] string? country,
+        [FromQuery] string? status,
+        [FromQuery] string? riskLevel,
+        [FromQuery] int? page,
+        [FromQuery] int? size,
+        [FromQuery] string? sortBy,
+        [FromQuery] string? sortDirection,
+        CancellationToken ct);
 }
