@@ -44,4 +44,10 @@ public interface ISuppliersController
     [SwaggerResponse(StatusCodes.Status200OK, "Supplier found.", typeof(SupplierResponse))]
     [SwaggerResponse(StatusCodes.Status404NotFound, "Supplier not found.")]
     Task<IActionResult> GetById(string id, CancellationToken ct);
+
+    /// <summary>Soft-delete a supplier.</summary>
+    [SwaggerOperation(Summary = "Delete supplier", Tags = ["Suppliers"])]
+    [SwaggerResponse(StatusCodes.Status204NoContent, "Supplier deleted.")]
+    [SwaggerResponse(StatusCodes.Status404NotFound, "Supplier not found.")]
+    Task<IActionResult> Delete(string id, CancellationToken ct);
 }
