@@ -1,6 +1,7 @@
 using Microsoft.OpenApi;
 using RiskScreening.API.Shared.Infrastructure.Documentation.OpenApi.Filters;
 using RiskScreening.API.Shared.Interfaces.REST.Resources;
+using Swashbuckle.AspNetCore.Annotations;
 
 namespace RiskScreening.API.Shared.Infrastructure.Documentation.OpenApi.Extensions;
 
@@ -17,6 +18,7 @@ public static class WebApplicationBuilderExtensions
     ///         <item>Swashbuckle annotations support</item>
     ///         <item><see cref="StandardResponsesOperationFilter"/> for custom response attributes</item>
     ///         <item><see cref="ErrorResponse"/> schema registration</item>
+    ///         <item>API grouping by module (All, IAM, Suppliers)</item>
     ///     </list>
     /// </summary>
     public static void AddOpenApiDocumentation(this WebApplicationBuilder builder)
@@ -31,22 +33,68 @@ public static class WebApplicationBuilderExtensions
         {
             var info = builder.Configuration.GetSection("OpenApi");
 
-            options.SwaggerDoc("v1", new OpenApiInfo
+            var contact = new OpenApiContact
+            {
+                Name = info["Contact:Name"] ?? string.Empty,
+                Email = info["Contact:Email"] ?? string.Empty
+            };
+
+            var license = new OpenApiLicense
+            {
+                Name = "Apache 2.0",
+                Url = new Uri("https://www.apache.org/licenses/LICENSE-2.0.html")
+            };
+
+            // ── API Groups (one Swagger doc per module) ──────────────────────
+
+            options.SwaggerDoc("all", new OpenApiInfo
             {
                 Title = info["Title"] ?? builder.Environment.ApplicationName,
                 Version = info["Version"] ?? "v1",
                 Description = info["Description"] ?? string.Empty,
-                Contact = new OpenApiContact
-                {
-                    Name = info["Contact:Name"] ?? string.Empty,
-                    Email = info["Contact:Email"] ?? string.Empty
-                },
-                License = new OpenApiLicense
-                {
-                    Name = "Apache 2.0",
-                    Url = new Uri("https://www.apache.org/licenses/LICENSE-2.0.html")
-                }
+                Contact = contact,
+                License = license
             });
+
+            options.SwaggerDoc("iam", new OpenApiInfo
+            {
+                Title = "Risk Screening — IAM Module",
+                Version = info["Version"] ?? "v1",
+                Description = "Identity & Access Management: authentication, users and roles.",
+                Contact = contact,
+                License = license
+            });
+
+            options.SwaggerDoc("suppliers", new OpenApiInfo
+            {
+                Title = "Risk Screening — Suppliers Module",
+                Version = info["Version"] ?? "v1",
+                Description = "Supplier management: CRUD, due-diligence lifecycle, risk screening.",
+                Contact = contact,
+                License = license
+            });
+
+            // Route each endpoint to the correct group based on its Swagger tag
+            options.DocInclusionPredicate((docName, apiDesc) =>
+            {
+                if (docName == "all") return true;
+
+                var tags = apiDesc.ActionDescriptor.EndpointMetadata
+                    .OfType<SwaggerOperationAttribute>()
+                    .SelectMany(a => a.Tags ?? [])
+                    .ToList();
+
+                return docName switch
+                {
+                    "iam" => tags.Any(t =>
+                        t.Equals("Authentication", StringComparison.OrdinalIgnoreCase)),
+                    "suppliers" => tags.Any(t =>
+                        t.Equals("Suppliers", StringComparison.OrdinalIgnoreCase)),
+                    _ => false
+                };
+            });
+
+            // ── Security ─────────────────────────────────────────────────────
 
             // JWT Bearer authentication
             options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
@@ -66,6 +114,8 @@ public static class WebApplicationBuilderExtensions
                 requirement.Add(new OpenApiSecuritySchemeReference("Bearer", doc), []);
                 return requirement;
             });
+
+            // ── Filters & Annotations ────────────────────────────────────────
 
             // Enable [SwaggerOperation], [SwaggerResponse], etc.
             options.EnableAnnotations();
