@@ -183,6 +183,56 @@ paths:
                   hasPrevious: false
 
   /api/suppliers/{id}:
+    put:
+      summary: Actualizar proveedor
+      description: |
+        Actualiza todos los campos de un proveedor existente.
+        Si el TaxId cambia, se valida que no exista otro proveedor con el mismo TaxId.
+
+        **Errores posibles:**
+        - 400: Campos faltantes, formato invalido (email, telefono, URL, TaxId, etc.)
+        - 404: Proveedor no encontrado o eliminado
+        - 409: Nuevo TaxId ya existe en el sistema
+      tags: [Suppliers]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID del proveedor (UUID)
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSupplierRequest'
+            example:
+              legalName: Acme Soluciones S.A.C.
+              commercialName: Acme Peru
+              taxId: "20512345678"
+              country: PE
+              contactPhone: "+51 999 777 666"
+              contactEmail: ventas@acme.pe
+              website: https://acme.pe
+              address: Av. Arequipa 5678, Lima
+              annualBillingUsd: 250000.00
+              notes: Actualizado con nueva informacion comercial
+      responses:
+        '200':
+          description: Proveedor actualizado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupplierResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
     get:
       summary: Obtener proveedor por ID
       description: |
@@ -261,6 +311,54 @@ components:
           nullable: true
           description: Facturacion anual en USD (max 2 decimales, >= 0)
           example: 150000.50
+        notes:
+          type: string
+          nullable: true
+          description: Notas adicionales sobre el proveedor
+
+    UpdateSupplierRequest:
+      type: object
+      required: [legalName, commercialName, taxId, country]
+      properties:
+        legalName:
+          type: string
+          description: Razon social del proveedor (max 200 caracteres)
+        commercialName:
+          type: string
+          description: Nombre comercial del proveedor (max 200 caracteres)
+        taxId:
+          type: string
+          description: Numero de identificacion tributaria (11 digitos, ej. RUC peruano)
+          pattern: '^\d{11}$'
+        country:
+          type: string
+          description: Codigo de pais ISO 3166-1 alpha-2
+          example: PE
+        contactPhone:
+          type: string
+          nullable: true
+          description: Telefono de contacto principal
+          example: "+51 999 777 666"
+        contactEmail:
+          type: string
+          format: email
+          nullable: true
+          description: Email de contacto principal
+        website:
+          type: string
+          format: uri
+          nullable: true
+          description: URL del sitio web del proveedor
+        address:
+          type: string
+          nullable: true
+          description: Direccion fisica o postal (max 500 caracteres)
+        annualBillingUsd:
+          type: number
+          format: decimal
+          nullable: true
+          description: Facturacion anual en USD (max 2 decimales, >= 0)
+          example: 250000.00
         notes:
           type: string
           nullable: true

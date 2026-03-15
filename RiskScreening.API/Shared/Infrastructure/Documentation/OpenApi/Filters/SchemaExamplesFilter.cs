@@ -24,6 +24,8 @@ public class SchemaExamplesFilter : ISchemaFilter
             ApplyAuthenticatedUserResponse(concreteSchema);
         else if (context.Type == typeof(CreateSupplierRequest))
             ApplyCreateSupplierRequest(concreteSchema);
+        else if (context.Type == typeof(UpdateSupplierRequest))
+            ApplyUpdateSupplierRequest(concreteSchema);
         else if (context.Type == typeof(SupplierResponse))
             ApplySupplierResponse(concreteSchema);
     }
@@ -59,6 +61,20 @@ public class SchemaExamplesFilter : ISchemaFilter
         SetExample(schema, "address", "Av. Javier Prado 1234, Lima");
         SetExample(schema, "annualBillingUsd", 150000.50);
         SetExample(schema, "notes", "Proveedor referido por el area de compras");
+    }
+
+    private static void ApplyUpdateSupplierRequest(OpenApiSchema schema)
+    {
+        SetExample(schema, "legalName", "Acme Soluciones S.A.C.");
+        SetExample(schema, "commercialName", "Acme Peru");
+        SetExample(schema, "taxId", "20512345678");
+        SetExample(schema, "country", "PE");
+        SetExample(schema, "contactPhone", "+51 999 777 666");
+        SetExample(schema, "contactEmail", "ventas@acme.pe");
+        SetExample(schema, "website", "https://acme.pe");
+        SetExample(schema, "address", "Av. Arequipa 5678, Lima");
+        SetExample(schema, "annualBillingUsd", 250000.00);
+        SetExample(schema, "notes", "Actualizado con nueva informacion comercial");
     }
 
     private static void ApplySupplierResponse(OpenApiSchema schema)
