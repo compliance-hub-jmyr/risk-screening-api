@@ -70,6 +70,19 @@ public class SuppliersController(IMediator mediator)
     }
 
     /// <inheritdoc/>
+    [HttpPut("{id}")]
+    [ProducesResponseType(typeof(SupplierResponse), StatusCodes.Status200OK)]
+    [ApiResponseBadRequest]
+    [ApiResponseNotFound]
+    [ApiResponseConflict]
+    public async Task<IActionResult> Update(string id, [FromBody] UpdateSupplierRequest request, CancellationToken ct)
+    {
+        var command = UpdateSupplierRequestMapper.ToCommand(id, request);
+        var supplier = await mediator.Send(command, ct);
+        return Ok(SupplierResponseMapper.ToResponse(supplier));
+    }
+
+    /// <inheritdoc/>
     [HttpDelete("{id}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ApiResponseNotFound]
