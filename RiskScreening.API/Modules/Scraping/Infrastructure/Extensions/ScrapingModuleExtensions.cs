@@ -38,9 +38,11 @@ public static class ScrapingModuleExtensions
 
         builder.Services.AddHttpClient("WorldBank", client =>
         {
-            client.BaseAddress = new Uri("https://projects.worldbank.org/");
+            client.BaseAddress = new Uri("https://apigwext.worldbank.org/");
             client.Timeout = TimeSpan.FromSeconds(30);
             client.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
+            client.DefaultRequestHeaders.Add("apikey", "z9duUaFUiEUYSHs97CU38fcZO7ipOPvm");
+            client.DefaultRequestHeaders.Add("Accept", "application/json");
         });
 
         builder.Services.AddHttpClient("Icij", client =>
@@ -57,5 +59,6 @@ public static class ScrapingModuleExtensions
         // Scraping sources
 
         builder.Services.AddScoped<IScrapingSource, OfacScrapingSource>();
+        builder.Services.AddScoped<IScrapingSource, WorldBankScrapingSource>();
     }
 }
