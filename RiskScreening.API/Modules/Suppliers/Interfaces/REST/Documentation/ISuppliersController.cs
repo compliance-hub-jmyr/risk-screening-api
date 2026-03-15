@@ -38,4 +38,10 @@ public interface ISuppliersController
         [FromQuery] string? sortBy,
         [FromQuery] string? sortDirection,
         CancellationToken ct);
+
+    /// <summary>Get a supplier by ID.</summary>
+    [SwaggerOperation(Summary = "Get supplier by ID", Tags = ["Suppliers"])]
+    [SwaggerResponse(StatusCodes.Status200OK, "Supplier found.", typeof(SupplierResponse))]
+    [SwaggerResponse(StatusCodes.Status404NotFound, "Supplier not found.")]
+    Task<IActionResult> GetById(string id, CancellationToken ct);
 }
