@@ -1,3 +1,6 @@
+using RiskScreening.API.Modules.Scraping.Infrastructure.Services;
+using RiskScreening.API.Modules.Scraping.Infrastructure.Sources;
+
 namespace RiskScreening.API.Modules.Scraping.Infrastructure.Extensions;
 
 /// <summary>
@@ -5,6 +8,7 @@ namespace RiskScreening.API.Modules.Scraping.Infrastructure.Extensions;
 ///     <list type="bullet">
 ///         <item>Three typed <c>HttpClient</c> instances (OFAC, World Bank, ICIJ) via <c>IHttpClientFactory</c></item>
 ///         <item><c>IMemoryCache</c> for on-demand scraping result caching</item>
+///         <item>Scraping sources and orchestration service</item>
 ///     </list>
 /// </summary>
 public static class ScrapingModuleExtensions
@@ -20,7 +24,7 @@ public static class ScrapingModuleExtensions
 
         builder.Services.AddHttpClient("Ofac", client =>
         {
-            client.BaseAddress = new Uri("https://sdn.ofac.treas.gov/");
+            client.BaseAddress = new Uri("https://www.treasury.gov/");
             client.Timeout = TimeSpan.FromSeconds(30);
             client.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
         });
@@ -42,5 +46,13 @@ public static class ScrapingModuleExtensions
         // Caching
 
         builder.Services.AddMemoryCache();
+
+        // Scraping sources
+
+        builder.Services.AddScoped<IScrapingSource, OfacScrapingSource>();
+
+        // Orchestration
+
+        builder.Services.AddScoped<ScrapingOrchestrationService>();
     }
 }
