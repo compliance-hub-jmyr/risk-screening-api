@@ -33,7 +33,8 @@ public record CountryCode : ValueObject
         return code.Value;
     }
 
-    private static readonly HashSet<string> ValidCodes = new(StringComparer.Ordinal)
+    /// <summary>All valid ISO 3166-1 alpha-2 codes — a single source of truth.</summary>
+    public static readonly IReadOnlySet<string> ValidCodes = new HashSet<string>(StringComparer.Ordinal)
     {
         "AD", "AE", "AF", "AG", "AI", "AL", "AM", "AO", "AQ", "AR", "AS", "AT", "AU", "AW", "AX", "AZ",
         "BA", "BB", "BD", "BE", "BF", "BG", "BH", "BI", "BJ", "BL", "BM", "BN", "BO", "BQ", "BR", "BS",

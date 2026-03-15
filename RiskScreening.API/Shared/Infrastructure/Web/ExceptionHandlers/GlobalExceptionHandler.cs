@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Diagnostics;
 using RiskScreening.API.Shared.Domain.Exceptions;
-using RiskScreening.API.Shared.Interfaces.REST.Resources;
 using RiskScreening.API.Shared.Infrastructure.Exceptions;
+using RiskScreening.API.Shared.Interfaces.REST.Resources;
 
 namespace RiskScreening.API.Shared.Infrastructure.Web.ExceptionHandlers;
 
