@@ -622,7 +622,6 @@ classDiagram
         +string CommercialName
         +string TaxId
         +string Country
-        +string? Industry
         +string? ContactEmail
         +string? ContactPhone
         +string? Website

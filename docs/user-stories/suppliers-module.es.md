@@ -26,7 +26,7 @@ Scripts de migracion SQL V005–V006, configuraciones EF Core para `Supplier` y 
 
 #### Tareas
 
-- `[BE-DB]` Script `V005__create_suppliers_table.sql` — columnas: `id`, `name`, `tax_id` (unico), `country`, `industry`, `contact_email`, `contact_phone`, `address`, `notes`, `risk_level` (CHECK: NONE/LOW/MEDIUM/HIGH), `status` (CHECK: PENDING/APPROVED/REJECTED/UNDER_REVIEW), `created_at`, `updated_at`, `created_by`, `updated_by`; indices: `IX_suppliers_risk_level`, `IX_suppliers_status`, `IX_suppliers_country`
+- `[BE-DB]` Script `V005__create_suppliers_table.sql` — columnas: `id`, `name`, `tax_id` (unico), `country`, `contact_email`, `contact_phone`, `address`, `notes`, `risk_level` (CHECK: NONE/LOW/MEDIUM/HIGH), `status` (CHECK: PENDING/APPROVED/REJECTED/UNDER_REVIEW), `created_at`, `updated_at`, `created_by`, `updated_by`; indices: `IX_suppliers_risk_level`, `IX_suppliers_status`, `IX_suppliers_country`
 - `[BE-DB]` Script `V006__create_screening_results_table.sql` — columnas: `id`, `supplier_id` (FK → `suppliers(id)` ON DELETE CASCADE), `screened_at`, `risk_level` (CHECK), `total_matches`, `notes`, `created_at`; indices: `IX_screening_results_supplier_id`, `IX_screening_results_screened_at DESC`, `IX_screening_results_risk_level`
 - `[BE-INFRA]` EF Core `SupplierConfiguration` y `ScreeningResultConfiguration`
 - `[BE-INFRA]` `SupplierRepository` y `ScreeningResultRepository` implementando `BaseRepository`
@@ -64,7 +64,7 @@ Endpoint `POST /api/suppliers` que valida la solicitud, verifica duplicados de `
 
 #### Tareas
 
-- `[BE-DOMAIN]` Agregado `Supplier` con metodo fabrica `Create(name, taxId, country, industry?, contactEmail?, contactPhone?, address?, notes?)` — inicializa `Status = PENDING`, `RiskLevel = NONE`
+- `[BE-DOMAIN]` Agregado `Supplier` con metodo fabrica `Create(name, taxId, country, contactEmail?, contactPhone?, address?, notes?)` — inicializa `Status = PENDING`, `RiskLevel = NONE`
 - `[BE-DOMAIN]` Reglas de valor en `Create`: `Name` ≤ 200, `TaxId` ≤ 50, `Country` ≤ 100, `ContactEmail` formato valido
 - `[BE-DOMAIN]` `SupplierTaxIdAlreadyExistsException` (extiende `BusinessRuleViolationException`)
 - `[BE-APP]` `CreateSupplierCommand` + `CreateSupplierCommandHandler` — verifica `ExistsByTaxIdAsync`, llama `Supplier.Create`, persiste, hace commit, retorna el nuevo Id
@@ -128,7 +128,7 @@ Endpoint `GET /api/suppliers` que retorna una lista paginada y ordenada de prove
 - Given que estoy autenticado y existen proveedores
 - When llamo `GET /api/suppliers?page=0&size=10`
 - Then recibo HTTP 200 con `{ content: [...], page: { number, size, totalElements, totalPages } }`
-- And cada entrada incluye `{ id, name, taxId, country, industry, riskLevel, status, createdAt, updatedAt }`
+- And cada entrada incluye `{ id, name, taxId, country, riskLevel, status, createdAt, updatedAt }`
 - And los proveedores eliminados (`status = REJECTED`) no estan incluidos
 
 **Escenario 2: Ordenamiento**
@@ -183,7 +183,7 @@ Endpoint `GET /api/suppliers/{supplierId}` que retorna el perfil completo del pr
 **Titulo:** Editar los datos de un proveedor
 
 **Descripcion:**
-Como oficial de compliance o administrador, quiero actualizar la informacion de un proveedor, para que el registro se mantenga preciso cuando cambien los datos de contacto o la clasificacion de industria.
+Como oficial de compliance o administrador, quiero actualizar la informacion de un proveedor, para que el registro se mantenga preciso cuando cambien los datos de contacto o comerciales.
 
 **Entregable:**
 Endpoint `PUT /api/suppliers/{supplierId}` que actualiza todos los campos mutables. `TaxId` esta intencionalmente excluido — no puede modificarse despues de la creacion.
@@ -195,7 +195,7 @@ Endpoint `PUT /api/suppliers/{supplierId}` que actualiza todos los campos mutabl
 
 #### Tareas
 
-- `[BE-DOMAIN]` Metodo `Supplier.Update(name, country, industry?, contactEmail?, contactPhone?, address?, notes?)` — aplica nuevos valores, enforces guard `EnsureNotDeleted()`
+- `[BE-DOMAIN]` Metodo `Supplier.Update(name, country, contactEmail?, contactPhone?, address?, notes?)` — aplica nuevos valores, enforces guard `EnsureNotDeleted()`
 - `[BE-APP]` `UpdateSupplierCommand` + `UpdateSupplierCommandHandler` — carga proveedor, llama `Update`, hace commit
 - `[BE-APP]` `UpdateSupplierCommandValidator` (FluentValidation — mismas reglas que Create, mas Id requerido)
 - `[BE-INTERFACES]` `SuppliersController.Update` — retorna 204 No Content

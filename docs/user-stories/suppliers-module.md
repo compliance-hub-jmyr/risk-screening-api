@@ -37,7 +37,6 @@ SQL migration scripts V005–V006, EF Core configurations for `Supplier` and `Sc
   - `address` NVARCHAR(500) NULL *(dirección física)*
   - `country` NVARCHAR(100) NOT NULL
   - `annual_billing_usd` DECIMAL(18, 2) NULL *(facturación anual en dólares)*
-  - `industry` NVARCHAR(100) NULL
   - `risk_level` NVARCHAR(10) NOT NULL DEFAULT 'NONE' CHECK (NONE/LOW/MEDIUM/HIGH)
   - `status` NVARCHAR(20) NOT NULL DEFAULT 'PENDING' CHECK (PENDING/APPROVED/REJECTED/UNDER_REVIEW)
   - `is_deleted` BIT NOT NULL DEFAULT 0 *(soft-delete flag — independiente del status de negocio)*
@@ -96,7 +95,7 @@ Endpoint `POST /api/suppliers` que valida la solicitud, verifica duplicado de `T
 
 #### Tasks
 
-- `[BE-DOMAIN]` `Supplier` aggregate con factory method `Create(legalName, commercialName, taxId, country, contactPhone?, contactEmail?, website?, address?, annualBillingUsd?, industry?, notes?)` — inicializa `Status = PENDING`, `RiskLevel = NONE`, `IsDeleted = false`
+- `[BE-DOMAIN]` `Supplier` aggregate con factory method `Create(legalName, commercialName, taxId, country, contactPhone?, contactEmail?, website?, address?, annualBillingUsd?, notes?)` — inicializa `Status = PENDING`, `RiskLevel = NONE`, `IsDeleted = false`
 - `[BE-DOMAIN]` Value rules en `Create`:
   - `LegalName` ≤ 200, required
   - `CommercialName` ≤ 200, required
@@ -171,7 +170,7 @@ Endpoint `GET /api/suppliers` retornando lista paginada y ordenada de proveedore
 - Given I am authenticated and suppliers exist
 - When I call `GET /api/suppliers?page=0&size=10`
 - Then I receive HTTP 200 with `{ content: [...], page: { number, size, totalElements, totalPages } }`
-- And each entry includes `{ id, legalName, commercialName, taxId, country, industry, contactEmail, contactPhone, website, annualBillingUsd, riskLevel, status, updatedAt, createdAt }`
+- And each entry includes `{ id, legalName, commercialName, taxId, country, contactEmail, contactPhone, website, annualBillingUsd, riskLevel, status, updatedAt, createdAt }`
 - And soft-deleted suppliers (`isDeleted = true`) are NOT included
 - And results are ordered by `updatedAt` descending by default
 
@@ -244,7 +243,7 @@ Endpoint `PUT /api/suppliers/{supplierId}` que actualiza todos los campos mutabl
 
 #### Tasks
 
-- `[BE-DOMAIN]` Método `Supplier.Update(legalName, commercialName, country, contactPhone?, contactEmail?, website?, address?, annualBillingUsd?, industry?, notes?)` — aplica nuevos valores, guard `EnsureNotDeleted()` verifica `IsDeleted = false`
+- `[BE-DOMAIN]` Método `Supplier.Update(legalName, commercialName, country, contactPhone?, contactEmail?, website?, address?, annualBillingUsd?, notes?)` — aplica nuevos valores, guard `EnsureNotDeleted()` verifica `IsDeleted = false`
 - `[BE-APP]` `UpdateSupplierCommand` + `UpdateSupplierCommandHandler` — carga supplier, llama `Update`, commits
 - `[BE-APP]` `UpdateSupplierCommandValidator` (FluentValidation — mismas reglas que Create, más Id required)
 - `[BE-INTERFACES]` `SuppliersController.Update` — retorna 204 No Content
