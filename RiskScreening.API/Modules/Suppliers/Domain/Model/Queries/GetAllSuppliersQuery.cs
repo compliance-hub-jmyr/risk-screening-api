@@ -1,4 +1,5 @@
 using MediatR;
+using RiskScreening.API.Modules.Suppliers.Domain.Model.Aggregates;
 using RiskScreening.API.Shared.Infrastructure.Persistence.Query.Pagination;
 using RiskScreening.API.Shared.Interfaces.REST.Resources;
 
@@ -15,7 +16,7 @@ public record GetAllSuppliersQuery(
     int? Size = null,
     string? SortBy = null,
     string? SortDirection = null
-) : IRequest<PageResponse<Aggregates.Supplier>>
+) : IRequest<PageResponse<Supplier>>
 {
     public PageRequest ToPageRequest() => new(Page, Size, SortBy, SortDirection);
 }
