@@ -2,12 +2,32 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using RiskScreening.API.Modules.Suppliers.Domain.Model.Aggregates;
 using RiskScreening.API.Modules.Suppliers.Domain.Model.ValueObjects;
+using RiskScreening.API.Modules.Suppliers.Infrastructure.Persistence.Converters;
 using RiskScreening.API.Shared.Domain.Model.ValueObjects;
 
 namespace RiskScreening.API.Modules.Suppliers.Infrastructure.Persistence.Configurations;
 
+/// <summary>
+/// Configures persistence mapping for <see cref="Supplier"/> in EF Core.
+/// </summary>
 public class SupplierConfiguration : IEntityTypeConfiguration<Supplier>
 {
+    // The custom converter accepts both value objects and raw strings in provider
+    // conversion to avoid EF Core 10 casting issues in LIKE/equality predicates.
+    private static readonly StringValueObjectConverter<LegalName> LegalNameConverter =
+        new(v => v.Value, v => new LegalName(v));
+
+    private static readonly StringValueObjectConverter<CommercialName> CommercialNameConverter =
+        new(v => v.Value, v => new CommercialName(v));
+
+    private static readonly StringValueObjectConverter<TaxId> TaxIdConverter = new(v => v.Value, v => new TaxId(v));
+
+    private static readonly StringValueObjectConverter<CountryCode> CountryCodeConverter =
+        new(v => v.Value, v => new CountryCode(v));
+
+    /// <summary>
+    /// Defines table, key, value object conversions, and column constraints.
+    /// </summary>
     public void Configure(EntityTypeBuilder<Supplier> builder)
     {
         builder.ToTable("suppliers");
@@ -19,17 +39,17 @@ public class SupplierConfiguration : IEntityTypeConfiguration<Supplier>
             .IsRequired();
 
         builder.Property(s => s.LegalName)
-            .HasConversion(v => v.Value, v => new LegalName(v))
+            .HasConversion(LegalNameConverter)
             .HasMaxLength(LegalName.MaxLength)
             .IsRequired();
 
         builder.Property(s => s.CommercialName)
-            .HasConversion(v => v.Value, v => new CommercialName(v))
+            .HasConversion(CommercialNameConverter)
             .HasMaxLength(CommercialName.MaxLength)
             .IsRequired();
 
         builder.Property(s => s.TaxId)
-            .HasConversion(v => v.Value, v => new TaxId(v))
+            .HasConversion(TaxIdConverter)
             .HasMaxLength(11)
             .IsRequired();
 
@@ -61,7 +81,7 @@ public class SupplierConfiguration : IEntityTypeConfiguration<Supplier>
             .HasMaxLength(SupplierAddress.MaxLength);
 
         builder.Property(s => s.Country)
-            .HasConversion(v => v.Value, v => new CountryCode(v))
+            .HasConversion(CountryCodeConverter)
             .HasMaxLength(2)
             .IsRequired();
 

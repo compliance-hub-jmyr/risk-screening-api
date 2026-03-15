@@ -28,18 +28,18 @@ SQL migration scripts V005–V006, EF Core configurations for `Supplier` and `Sc
 
 - `[BE-DB]` Script `V005__create_suppliers_table.sql` — columns:
   - `id` NVARCHAR(36) PK
-  - `legal_name` NVARCHAR(200) NOT NULL *(razón social)*
-  - `commercial_name` NVARCHAR(200) NOT NULL *(nombre comercial)*
-  - `tax_id` CHAR(11) NOT NULL UNIQUE *(identificación tributaria — exactamente 11 dígitos numéricos)*
+  - `legal_name` NVARCHAR(200) NOT NULL *(trade name / razón social)*
+  - `commercial_name` NVARCHAR(200) NOT NULL *(commercial name / nombre comercial)*
+  - `tax_id` CHAR(11) NOT NULL UNIQUE *(tax identifier — exactly 11 numeric digits)*
   - `contact_phone` NVARCHAR(50) NULL
   - `contact_email` NVARCHAR(255) NULL
-  - `website` NVARCHAR(500) NULL *(sitio web)*
-  - `address` NVARCHAR(500) NULL *(dirección física)*
+  - `website` NVARCHAR(500) NULL
+  - `address` NVARCHAR(500) NULL
   - `country` NVARCHAR(100) NOT NULL
-  - `annual_billing_usd` DECIMAL(18, 2) NULL *(facturación anual en dólares)*
+  - `annual_billing_usd` DECIMAL(18, 2) NULL *(annual billing in USD)*
   - `risk_level` NVARCHAR(10) NOT NULL DEFAULT 'NONE' CHECK (NONE/LOW/MEDIUM/HIGH)
   - `status` NVARCHAR(20) NOT NULL DEFAULT 'PENDING' CHECK (PENDING/APPROVED/REJECTED/UNDER_REVIEW)
-  - `is_deleted` BIT NOT NULL DEFAULT 0 *(soft-delete flag — independiente del status de negocio)*
+  - `is_deleted` BIT NOT NULL DEFAULT 0 *(soft-delete flag — independent of business status)*
   - `notes` NVARCHAR(MAX) NULL
   - `created_at` DATETIME2, `updated_at` DATETIME2, `created_by` NVARCHAR(255), `updated_by` NVARCHAR(255)
   - Indexes: `IX_suppliers_risk_level`, `IX_suppliers_status`, `IX_suppliers_country`, `IX_suppliers_is_deleted`
@@ -48,26 +48,26 @@ SQL migration scripts V005–V006, EF Core configurations for `Supplier` and `Sc
 - `[BE-DB]` Script `V006__create_screening_results_table.sql` — columns:
   - `id` NVARCHAR(36) PK
   - `supplier_id` NVARCHAR(36) NOT NULL FK → `suppliers(id)` ON DELETE CASCADE
-  - `sources_queried` NVARCHAR(200) NOT NULL *(CSV de fuentes consultadas, e.g. "OFAC,WORLD_BANK,ICIJ")*
+  - `sources_queried` NVARCHAR(200) NOT NULL *(CSV of queried sources, e.g. "OFAC,WORLD_BANK,ICIJ")*
   - `screened_at` DATETIME2 NOT NULL DEFAULT GETUTCDATE()
   - `risk_level` NVARCHAR(10) NOT NULL DEFAULT 'NONE' CHECK (NONE/LOW/MEDIUM/HIGH)
   - `total_matches` INT NOT NULL DEFAULT 0
-  - `entries_json` NVARCHAR(MAX) NULL *(serialización JSON de los RiskEntry coincidentes)*
+  - `entries_json` NVARCHAR(MAX) NULL *(JSON serialization of matched RiskEntry objects)*
   - `created_at` DATETIME2 NOT NULL DEFAULT GETUTCDATE()
   - Indexes: `IX_screening_results_supplier_id`, `IX_screening_results_screened_at DESC`, `IX_screening_results_risk_level`
-  - **Sin `updated_at`** — los resultados de screening son inmutables tras su creación
+  - **No `updated_at`** — screening results are immutable after creation
 
-- `[BE-INFRA]` EF Core `SupplierConfiguration` — mapea todos los campos incluyendo `LegalName`, `CommercialName`, `Website`, `AnnualBillingUsd`, `IsDeleted`
-- `[BE-INFRA]` EF Core `ScreeningResultConfiguration` — mapea `SourcesQueried`, `EntriesJson`; sin `updated_at`
-- `[BE-INFRA]` `SupplierRepository` y `ScreeningResultRepository` implementando `BaseRepository`
-- `[BE-INFRA]` `SuppliersModuleExtensions.AddSuppliersModule()` — registra ambos repositorios como scoped
+- `[BE-INFRA]` EF Core `SupplierConfiguration` — maps all fields including `LegalName`, `CommercialName`, `Website`, `AnnualBillingUsd`, `IsDeleted`
+- `[BE-INFRA]` EF Core `ScreeningResultConfiguration` — maps `SourcesQueried`, `EntriesJson`; no `updated_at`
+- `[BE-INFRA]` `SupplierRepository` and `ScreeningResultRepository` implementing `BaseRepository`
+- `[BE-INFRA]` `SuppliersModuleExtensions.AddSuppliersModule()` — registers both repositories as scoped
 
 #### Acceptance Criteria
 
 - Given the application starts against a fresh database
 - When the DbUp migration sequence completes
-- Then the `suppliers` table exists with `legal_name`, `commercial_name`, `tax_id` CHAR(11), `website`, `annual_billing_usd`, `is_deleted`, y los constraints correspondientes
-- And the `screening_results` table exists con `sources_queried` y `entries_json`, sin `updated_at`, con FK a `suppliers` CASCADE DELETE
+- Then the `suppliers` table exists with `legal_name`, `commercial_name`, `tax_id` CHAR(11), `website`, `annual_billing_usd`, `is_deleted`, and the corresponding constraints
+- And the `screening_results` table exists with `sources_queried` and `entries_json`, no `updated_at`, with FK to `suppliers` CASCADE DELETE
 - And subsequent startups are idempotent (DbUp does not re-run applied scripts)
 
 ---
@@ -84,7 +84,7 @@ SQL migration scripts V005–V006, EF Core configurations for `Supplier` and `Sc
 As a compliance officer or administrator, I want to register a new supplier in the platform, so that I can track its risk profile and run screening checks against international risk lists.
 
 **Deliverable:**
-Endpoint `POST /api/suppliers` que valida la solicitud, verifica duplicado de `TaxId`, crea el `Supplier` aggregate con `status = PENDING`, `riskLevel = NONE`, `isDeleted = false`, y retorna `201 Created` con el nuevo Id.
+Endpoint `POST /api/suppliers` that validates the request, checks for `TaxId` duplicates, creates the `Supplier` aggregate with `status = PENDING`, `riskLevel = NONE`, `isDeleted = false`, and returns `201 Created` with the new Id.
 
 **Dependencies:**
 - `TS-SUP-000`: module bootstrap
@@ -94,19 +94,19 @@ Endpoint `POST /api/suppliers` que valida la solicitud, verifica duplicado de `T
 
 #### Tasks
 
-- `[BE-DOMAIN]` `Supplier` aggregate con factory method `Create(legalName, commercialName, taxId, country, contactPhone?, contactEmail?, website?, address?, annualBillingUsd?, notes?)` — inicializa `Status = PENDING`, `RiskLevel = NONE`, `IsDeleted = false`
-- `[BE-DOMAIN]` Value rules en `Create`:
+- `[BE-DOMAIN]` `Supplier` aggregate with factory method `Create(legalName, commercialName, taxId, country, contactPhone?, contactEmail?, website?, address?, annualBillingUsd?, notes?)` — initializes `Status = PENDING`, `RiskLevel = NONE`, `IsDeleted = false`
+- `[BE-DOMAIN]` Value rules in `Create`:
   - `LegalName` ≤ 200, required
   - `CommercialName` ≤ 200, required
-  - `TaxId` exactamente 11 dígitos numéricos (`^\d{11}$`)
-  - `ContactEmail` formato válido si se provee
-  - `Website` formato URL válido si se provee
-  - `AnnualBillingUsd` ≥ 0 si se provee
+  - `TaxId` exactly 11 numeric digits (`^\d{11}$`)
+  - `ContactEmail` valid format if provided
+  - `Website` valid URL format if provided
+  - `AnnualBillingUsd` ≥ 0 if provided
 - `[BE-DOMAIN]` `SupplierTaxIdAlreadyExistsException` (extends `BusinessRuleViolationException`)
-- `[BE-APP]` `CreateSupplierCommand` + `CreateSupplierCommandHandler` — verifica `ExistsByTaxIdAsync`, llama `Supplier.Create`, persiste, retorna nuevo Id
-- `[BE-APP]` `CreateSupplierCommandValidator` (FluentValidation) con todas las reglas de campo
-- `[BE-INTERFACES]` `SuppliersController.Create` — mapea `CreateSupplierRequest` → `CreateSupplierCommand`; retorna `201 Created` con `Location` header
-- `[BE-TEST]` Unit test: creación exitosa, TaxId duplicado retorna 409, TaxId con formato inválido retorna 400, campos requeridos faltantes retornan 400
+- `[BE-APP]` `CreateSupplierCommand` + `CreateSupplierCommandHandler` — checks `ExistsByTaxIdAsync`, calls `Supplier.Create`, persists, returns new Id
+- `[BE-APP]` `CreateSupplierCommandValidator` (FluentValidation) with all field rules
+- `[BE-INTERFACES]` `SuppliersController.Create` — maps `CreateSupplierRequest` → `CreateSupplierCommand`; returns `201 Created` with `Location` header
+- `[BE-TEST]` Unit test: successful creation, duplicate TaxId returns 409, invalid TaxId format returns 400, missing required fields return 400
 
 #### Acceptance Criteria
 
@@ -149,7 +149,7 @@ Endpoint `POST /api/suppliers` que valida la solicitud, verifica duplicado de `T
 As a compliance officer or administrator, I want to see the paginated list of all registered suppliers ordered by last edit date, to monitor their statuses and risk levels from the main dashboard.
 
 **Deliverable:**
-Endpoint `GET /api/suppliers` retornando lista paginada y ordenada de proveedores activos (`isDeleted = false`), con soporte para `page`, `size`, `sortBy`, `sortDirection`.
+Endpoint `GET /api/suppliers` returning a paginated and sorted list of active suppliers (`isDeleted = false`), with support for `page`, `size`, `sortBy`, `sortDirection`.
 
 **Dependencies:**
 - `US-SUP-001`
@@ -158,10 +158,10 @@ Endpoint `GET /api/suppliers` retornando lista paginada y ordenada de proveedore
 
 #### Tasks
 
-- `[BE-APP]` `GetAllSuppliersQuery` (page, size, sortBy, sortDirection) + `GetAllSuppliersQueryHandler` — filtra `IsDeleted = false`, ordena por `UpdatedAt` desc por defecto
-- `[BE-INFRA]` `ISupplierRepository.Query()` retornando `IQueryable<Supplier>` para composición LINQ
-- `[BE-INTERFACES]` `SuppliersController.GetAll` — mapea query params a `GetAllSuppliersQuery`; retorna `PageResponse<SupplierResponse>`
-- `[BE-TEST]` Unit test: listado paginado, sorting, resultado vacío
+- `[BE-APP]` `GetAllSuppliersQuery` (page, size, sortBy, sortDirection) + `GetAllSuppliersQueryHandler` — filters `IsDeleted = false`, sorts by `UpdatedAt` desc by default
+- `[BE-INFRA]` `ISupplierRepository.Query()` returning `IQueryable<Supplier>` for LINQ composition
+- `[BE-INTERFACES]` `SuppliersController.GetAll` — maps query params to `GetAllSuppliersQuery`; returns `PageResponse<SupplierResponse>`
+- `[BE-TEST]` Unit test: paginated listing, sorting, empty result
 
 #### Acceptance Criteria
 
@@ -198,7 +198,7 @@ Endpoint `GET /api/suppliers` retornando lista paginada y ordenada de proveedore
 As a compliance officer or administrator, I want to see the full profile of a specific supplier, to review its details, current risk level, and status before taking action.
 
 **Deliverable:**
-Endpoint `GET /api/suppliers/{supplierId}` retornando el perfil completo del proveedor.
+Endpoint `GET /api/suppliers/{supplierId}` returning the supplier's full profile.
 
 **Dependencies:**
 - `US-SUP-002`
@@ -207,9 +207,9 @@ Endpoint `GET /api/suppliers/{supplierId}` retornando el perfil completo del pro
 
 #### Tasks
 
-- `[BE-APP]` `GetSupplierByIdQuery` + `GetSupplierByIdQueryHandler` — lanza `SupplierNotFoundException` si no existe o si `IsDeleted = true`
-- `[BE-INTERFACES]` `SuppliersController.GetById` — mapea 404 via `GlobalExceptionHandler`
-- `[BE-TEST]` Unit test: supplier encontrado, supplier no encontrado retorna 404, supplier eliminado retorna 404
+- `[BE-APP]` `GetSupplierByIdQuery` + `GetSupplierByIdQueryHandler` — throws `SupplierNotFoundException` if not found or `IsDeleted = true`
+- `[BE-INTERFACES]` `SuppliersController.GetById` — maps 404 via `GlobalExceptionHandler`
+- `[BE-TEST]` Unit test: supplier found, supplier not found returns 404, soft-deleted supplier returns 404
 
 #### Acceptance Criteria
 
@@ -233,7 +233,7 @@ Endpoint `GET /api/suppliers/{supplierId}` retornando el perfil completo del pro
 As a compliance officer or administrator, I want to update a supplier's information, so that the record stays accurate when the supplier's contact details or commercial data change.
 
 **Deliverable:**
-Endpoint `PUT /api/suppliers/{supplierId}` que actualiza todos los campos mutables. `TaxId` es intencionalmente excluido — no puede cambiarse tras la creación.
+Endpoint `PUT /api/suppliers/{supplierId}` that updates all mutable fields. `TaxId` is intentionally excluded — it cannot be changed after creation.
 
 **Dependencies:**
 - `US-SUP-003`
@@ -242,11 +242,11 @@ Endpoint `PUT /api/suppliers/{supplierId}` que actualiza todos los campos mutabl
 
 #### Tasks
 
-- `[BE-DOMAIN]` Método `Supplier.Update(legalName, commercialName, country, contactPhone?, contactEmail?, website?, address?, annualBillingUsd?, notes?)` — aplica nuevos valores, guard `EnsureNotDeleted()` verifica `IsDeleted = false`
-- `[BE-APP]` `UpdateSupplierCommand` + `UpdateSupplierCommandHandler` — carga supplier, llama `Update`, commits
-- `[BE-APP]` `UpdateSupplierCommandValidator` (FluentValidation — mismas reglas que Create, más Id required)
-- `[BE-INTERFACES]` `SuppliersController.Update` — retorna 204 No Content
-- `[BE-TEST]` Unit test: actualización exitosa, supplier no encontrado retorna 404, supplier eliminado retorna 422
+- `[BE-DOMAIN]` `Supplier.Update(legalName, commercialName, country, contactPhone?, contactEmail?, website?, address?, annualBillingUsd?, notes?)` method — applies new values, `EnsureNotDeleted()` guard checks `IsDeleted = false`
+- `[BE-APP]` `UpdateSupplierCommand` + `UpdateSupplierCommandHandler` — loads supplier, calls `Update`, commits
+- `[BE-APP]` `UpdateSupplierCommandValidator` (FluentValidation — same rules as Create, plus Id required)
+- `[BE-INTERFACES]` `SuppliersController.Update` — returns 204 No Content
+- `[BE-TEST]` Unit test: successful update, supplier not found returns 404, soft-deleted supplier returns 422
 
 #### Acceptance Criteria
 
@@ -281,7 +281,7 @@ Endpoint `PUT /api/suppliers/{supplierId}` que actualiza todos los campos mutabl
 As an administrator, I want to logically delete a supplier record, so that decommissioned suppliers no longer appear in active listings without losing audit history.
 
 **Deliverable:**
-Endpoint `DELETE /api/suppliers/{supplierId}` que establece `IsDeleted = true`. **No modifica `Status`** — el estado de negocio (PENDING/APPROVED/REJECTED/UNDER_REVIEW) se preserva para auditoría. El registro permanece en la base de datos y queda excluido de todos los listados.
+Endpoint `DELETE /api/suppliers/{supplierId}` that sets `IsDeleted = true`. **Does not modify `Status`** — the business state (PENDING/APPROVED/REJECTED/UNDER_REVIEW) is preserved for audit. The record remains in the database and is excluded from all listings.
 
 **Dependencies:**
 - `US-SUP-003`
@@ -290,12 +290,12 @@ Endpoint `DELETE /api/suppliers/{supplierId}` que establece `IsDeleted = true`. 
 
 #### Tasks
 
-- `[BE-DOMAIN]` Método `Supplier.Delete()` — establece `IsDeleted = true`; guard `EnsureNotDeleted()` lanza `SupplierAlreadyDeletedException` si `IsDeleted` ya es `true`
+- `[BE-DOMAIN]` `Supplier.Delete()` method — sets `IsDeleted = true`; `EnsureNotDeleted()` guard throws `SupplierAlreadyDeletedException` if `IsDeleted` is already `true`
 - `[BE-APP]` `DeleteSupplierCommand` + `DeleteSupplierCommandHandler`
-- `[BE-INTERFACES]` `SuppliersController.Delete` — retorna 204 No Content
-- `[BE-TEST]` Unit test: eliminación exitosa, ya eliminado retorna 404, supplier no encontrado retorna 404
+- `[BE-INTERFACES]` `SuppliersController.Delete` — returns 204 No Content
+- `[BE-TEST]` Unit test: successful deletion, already deleted returns 404, supplier not found returns 404
 
-> **Nota de diseño:** El soft-delete (`IsDeleted = true`) es independiente del rechazo de compliance (`Status = REJECTED`). Un proveedor rechazado sigue visible en listados hasta que sea explícitamente eliminado. Ambas operaciones pueden coexistir.
+> **Design note:** The soft-delete (`IsDeleted = true`) is independent of the compliance rejection (`Status = REJECTED`). A rejected supplier remains visible in listings until explicitly deleted. Both operations can coexist.
 
 #### Acceptance Criteria
 
@@ -328,10 +328,10 @@ Endpoint `DELETE /api/suppliers/{supplierId}` que establece `IsDeleted = true`. 
 **Title:** Trigger a live risk screening run
 
 **Description:**
-As a compliance officer, I want to trigger a risk screening for a supplier against international sanctions and debarment lists — pudiendo seleccionar una o más fuentes — para evaluar su nivel de riesgo antes de aprobarlo como proveedor.
+As a compliance officer, I want to trigger a risk screening for a supplier against international sanctions and debarment lists — selecting one or more sources — to evaluate its risk level before approving it as a vendor.
 
 **Deliverable:**
-Endpoint `POST /api/suppliers/{supplierId}/screenings` que acepta un listado opcional de fuentes a consultar (OFAC, WORLD_BANK, ICIJ; por defecto todas), ejecuta las consultas en paralelo, computa un `RiskLevel` con lógica por fuente, crea un `ScreeningResult` almacenando las entradas coincidentes serializadas en JSON, actualiza el `RiskLevel` del proveedor, y auto-transiciona el proveedor a `UNDER_REVIEW` si el resultado es `HIGH`. Retorna `201 Created` con el Id del nuevo screening result.
+Endpoint `POST /api/suppliers/{supplierId}/screenings` that accepts an optional list of sources to query (OFAC, WORLD_BANK, ICIJ; all by default), executes the queries in parallel, computes a `RiskLevel` with per-source logic, creates a `ScreeningResult` storing the matched entries serialized as JSON, updates the supplier's `RiskLevel`, and auto-transitions the supplier to `UNDER_REVIEW` if the result is `HIGH`. Returns `201 Created` with the new screening result Id.
 
 **Dependencies:**
 - `US-SUP-003`
@@ -341,25 +341,25 @@ Endpoint `POST /api/suppliers/{supplierId}/screenings` que acepta un listado opc
 
 #### Tasks
 
-- `[BE-DOMAIN]` Método `Supplier.ApplyScreeningResult(RiskLevel)` — actualiza `RiskLevel`, establece `Status = UNDER_REVIEW` si `riskLevel = HIGH`
-- `[BE-DOMAIN]` `ScreeningResult` aggregate con factory `ScreeningResult.Create(supplierId, sourcesQueried, riskLevel, totalMatches, entries)` — inmutable tras creación; `entries` se serializa como JSON en `EntriesJson`
+- `[BE-DOMAIN]` `Supplier.ApplyScreeningResult(RiskLevel)` method — updates `RiskLevel`, sets `Status = UNDER_REVIEW` if `riskLevel = HIGH`
+- `[BE-DOMAIN]` `ScreeningResult` aggregate with factory `ScreeningResult.Create(supplierId, sourcesQueried, riskLevel, totalMatches, entries)` — immutable after creation; `entries` is serialized as JSON in `EntriesJson`
 - `[BE-DOMAIN]` `ScreeningResultNotFoundException` (extends `EntityNotFoundException`)
-- `[BE-APP]` `RunScreeningCommand` — campos: `SupplierId`, `Sources` (opcional `IReadOnlyList<string>?`; valores válidos: `"ofac"`, `"worldbank"`, `"icij"`; si null → todas)
+- `[BE-APP]` `RunScreeningCommand` — fields: `SupplierId`, `Sources` (optional `IReadOnlyList<string>?`; valid values: `"ofac"`, `"worldbank"`, `"icij"`; if null → all)
 - `[BE-APP]` `RunScreeningCommandHandler`:
-  1. Carga supplier; lanza `SupplierNotFoundException` si no existe o `IsDeleted = true`
-  2. Determina fuentes a consultar (param `Sources` o todas por defecto)
-  3. Llama `ScrapingOrchestrationService` para las fuentes seleccionadas en paralelo usando `LegalName` como término
-  4. Computa `RiskLevel` con **lógica por fuente**:
-     - **OFAC**: score ≥ 0.85 → HIGH | score ≥ 0.60 → MEDIUM | cualquier match → LOW
-     - **World Bank**: cualquier match → HIGH *(empresa formalmente inhabilitada)*
-     - **ICIJ**: cualquier match → LOW *(leak periodístico, no sanción oficial)*
-     - `RiskLevel` final = máximo entre todas las fuentes
-  5. Crea `ScreeningResult.Create(supplierId, sourcesQueried, riskLevel, totalMatches, allEntries)`
-  6. Llama `supplier.ApplyScreeningResult(riskLevel)`
-  7. Persiste ambos, commits, retorna nuevo result Id
+  1. Loads supplier; throws `SupplierNotFoundException` if not found or `IsDeleted = true`
+  2. Determines sources to query (`Sources` param or all by default)
+  3. Calls `ScrapingOrchestrationService` for the selected sources in parallel using `LegalName` as the search term
+  4. Computes `RiskLevel` with **per-source logic**:
+     - **OFAC**: score ≥ 0.85 → HIGH | score ≥ 0.60 → MEDIUM | any match → LOW
+     - **World Bank**: any match → HIGH *(formally debarred company)*
+     - **ICIJ**: any match → LOW *(journalistic leak, not an official sanction)*
+     - Final `RiskLevel` = maximum across all sources
+  5. Creates `ScreeningResult.Create(supplierId, sourcesQueried, riskLevel, totalMatches, allEntries)`
+  6. Calls `supplier.ApplyScreeningResult(riskLevel)`
+  7. Persists both, commits, returns new result Id
 - `[BE-INFRA]` `IScreeningResultRepository` + `ScreeningResultRepository`
-- `[BE-INTERFACES]` `SuppliersController.RunScreening` — acepta body opcional `{ "sources": ["ofac", "worldbank"] }`; retorna `201 Created` con `Location` header
-- `[BE-TEST]` Unit test: screening crea result y actualiza supplier; World Bank match → HIGH; HIGH → UNDER_REVIEW; entries guardadas; supplier no encontrado retorna 404
+- `[BE-INTERFACES]` `SuppliersController.RunScreening` — accepts optional body `{ "sources": ["ofac", "worldbank"] }`; returns `201 Created` with `Location` header
+- `[BE-TEST]` Unit test: screening creates result and updates supplier; World Bank match → HIGH; HIGH → UNDER_REVIEW; entries persisted; supplier not found returns 404
 
 #### Acceptance Criteria
 
@@ -423,7 +423,7 @@ Endpoint `POST /api/suppliers/{supplierId}/screenings` que acepta un listado opc
 As a compliance officer or administrator, I want to see the full screening history for a supplier, ordered from most recent to oldest.
 
 **Deliverable:**
-Endpoint `GET /api/screenings?supplierId={supplierId}` retornando lista paginada de todos los screening results. Las **entradas coincidentes** (`entries`) se omiten en el listado para respuestas ligeras — se obtienen via `GET /api/screenings/{id}`.
+Endpoint `GET /api/screenings?supplierId={supplierId}` returning a paginated list of all screening results. The **matched entries** (`entries`) are omitted from the listing for lightweight responses — they are retrieved via `GET /api/screenings/{id}`.
 
 **Dependencies:**
 - `US-SUP-006`
@@ -432,9 +432,9 @@ Endpoint `GET /api/screenings?supplierId={supplierId}` retornando lista paginada
 
 #### Tasks
 
-- `[BE-APP]` `GetScreeningResultsBySupplierQuery` (supplierId, page, size) + handler — consulta via `QueryBySupplierId`, ordena por `ScreenedAt` desc
-- `[BE-INTERFACES]` `ScreeningsController.GetBySupplierId` — requiere `supplierId` query param; retorna `PageResponse<ScreeningResultSummaryResponse>` *(sin campo `entries`)*
-- `[BE-TEST]` Unit test: resultados paginados para proveedor válido, lista vacía cuando no hay screenings
+- `[BE-APP]` `GetScreeningResultsBySupplierQuery` (supplierId, page, size) + handler — queries via `QueryBySupplierId`, orders by `ScreenedAt` desc
+- `[BE-INTERFACES]` `ScreeningsController.GetBySupplierId` — requires `supplierId` query param; returns `PageResponse<ScreeningResultSummaryResponse>` *(without `entries` field)*
+- `[BE-TEST]` Unit test: paginated results for valid supplier, empty list when no screenings exist
 
 #### Acceptance Criteria
 
@@ -459,7 +459,7 @@ Endpoint `GET /api/screenings?supplierId={supplierId}` retornando lista paginada
 As a compliance officer, I want to retrieve the details of a specific screening result including all matched entries, so that I can review the exact records that determined the risk level.
 
 **Deliverable:**
-Endpoint `GET /api/screenings/{screeningId}` retornando el screening result completo con la lista de entradas coincidentes deserializadas desde `entriesJson`.
+Endpoint `GET /api/screenings/{screeningId}` returning the full screening result with the list of matched entries deserialized from `entriesJson`.
 
 **Dependencies:**
 - `US-SUP-007`
@@ -468,9 +468,9 @@ Endpoint `GET /api/screenings/{screeningId}` retornando el screening result comp
 
 #### Tasks
 
-- `[BE-APP]` `GetScreeningResultByIdQuery` + handler — lanza `ScreeningResultNotFoundException` si no existe; deserializa `EntriesJson` → `List<RiskEntry>`
-- `[BE-INTERFACES]` `ScreeningsController.GetById` — retorna `ScreeningResultDetailResponse` que incluye el campo `entries`
-- `[BE-TEST]` Unit test: result encontrado con entries deserializadas, result no encontrado retorna 404
+- `[BE-APP]` `GetScreeningResultByIdQuery` + handler — throws `ScreeningResultNotFoundException` if not found; deserializes `EntriesJson` → `List<RiskEntry>`
+- `[BE-INTERFACES]` `ScreeningsController.GetById` — returns `ScreeningResultDetailResponse` including the `entries` field
+- `[BE-TEST]` Unit test: result found with deserialized entries, result not found returns 404
 
 #### Acceptance Criteria
 
@@ -499,7 +499,7 @@ Endpoint `GET /api/screenings/{screeningId}` retornando el screening result comp
 As an administrator, I want to approve a supplier that has been reviewed, so that it can be marked as a trusted vendor.
 
 **Deliverable:**
-Endpoint `PATCH /api/suppliers/{supplierId}/approve` que transiciona `Status` a `APPROVED`.
+Endpoint `PATCH /api/suppliers/{supplierId}/approve` that transitions `Status` to `APPROVED`.
 
 **Dependencies:**
 - `US-SUP-006`
@@ -508,10 +508,10 @@ Endpoint `PATCH /api/suppliers/{supplierId}/approve` que transiciona `Status` a 
 
 #### Tasks
 
-- `[BE-DOMAIN]` Método `Supplier.Approve()` — establece `Status = APPROVED`; guard `EnsureNotDeleted()` verifica `IsDeleted = false`
+- `[BE-DOMAIN]` `Supplier.Approve()` method — sets `Status = APPROVED`; `EnsureNotDeleted()` guard checks `IsDeleted = false`
 - `[BE-APP]` `ApproveSupplierCommand` + `ApproveSupplierCommandHandler`
-- `[BE-INTERFACES]` `SuppliersController.Approve` — retorna 204 No Content
-- `[BE-TEST]` Unit test: aprobación exitosa, supplier eliminado retorna 404
+- `[BE-INTERFACES]` `SuppliersController.Approve` — returns 204 No Content
+- `[BE-TEST]` Unit test: successful approval, deleted supplier returns 404
 
 #### Acceptance Criteria
 
@@ -533,10 +533,10 @@ Endpoint `PATCH /api/suppliers/{supplierId}/approve` que transiciona `Status` a 
 **Title:** Mark a supplier as rejected by compliance
 
 **Description:**
-As an administrator, I want to reject a supplier that did not pass the compliance review. **Este rechazo es una decisión de negocio** y es independiente de la eliminación lógica del registro. Un proveedor rechazado sigue visible en listados para auditoría.
+As an administrator, I want to reject a supplier that did not pass the compliance review. **This rejection is a business decision** and is independent of the logical deletion of the record. A rejected supplier remains visible in listings for audit purposes.
 
 **Deliverable:**
-Endpoint `PATCH /api/suppliers/{supplierId}/reject` que transiciona `Status` a `REJECTED`.
+Endpoint `PATCH /api/suppliers/{supplierId}/reject` that transitions `Status` to `REJECTED`.
 
 **Dependencies:**
 - `US-SUP-009`
@@ -545,10 +545,10 @@ Endpoint `PATCH /api/suppliers/{supplierId}/reject` que transiciona `Status` a `
 
 #### Tasks
 
-- `[BE-DOMAIN]` Método `Supplier.Reject()` — establece `Status = REJECTED`; guard `EnsureNotDeleted()` verifica `IsDeleted = false`; lanza `InvalidSupplierStateException` si ya está en `REJECTED`
+- `[BE-DOMAIN]` `Supplier.Reject()` method — sets `Status = REJECTED`; `EnsureNotDeleted()` guard checks `IsDeleted = false`; throws `InvalidSupplierStateException` if already in `REJECTED`
 - `[BE-APP]` `RejectSupplierCommand` + `RejectSupplierCommandHandler`
-- `[BE-INTERFACES]` `SuppliersController.Reject` — retorna 204 No Content
-- `[BE-TEST]` Unit test: rechazo exitoso, ya rechazado retorna 422, supplier eliminado retorna 404
+- `[BE-INTERFACES]` `SuppliersController.Reject` — returns 204 No Content
+- `[BE-TEST]` Unit test: successful rejection, already rejected returns 422, deleted supplier returns 404
 
 #### Acceptance Criteria
 
@@ -579,7 +579,7 @@ Endpoint `PATCH /api/suppliers/{supplierId}/reject` que transiciona `Status` a `
 As a compliance officer, I want to manually place a supplier under review, so that I can flag it for additional investigation before approving or rejecting it — independently of automated screening triggers.
 
 **Deliverable:**
-Endpoint `PATCH /api/suppliers/{supplierId}/under-review` que transiciona `Status` a `UNDER_REVIEW`.
+Endpoint `PATCH /api/suppliers/{supplierId}/under-review` that transitions `Status` to `UNDER_REVIEW`.
 
 **Dependencies:**
 - `US-SUP-009`
@@ -588,10 +588,10 @@ Endpoint `PATCH /api/suppliers/{supplierId}/under-review` que transiciona `Statu
 
 #### Tasks
 
-- `[BE-DOMAIN]` Método `Supplier.MarkUnderReview()` — establece `Status = UNDER_REVIEW`; guard `EnsureNotDeleted()` verifica `IsDeleted = false`
+- `[BE-DOMAIN]` `Supplier.MarkUnderReview()` method — sets `Status = UNDER_REVIEW`; `EnsureNotDeleted()` guard checks `IsDeleted = false`
 - `[BE-APP]` `MarkUnderReviewCommand` + `MarkUnderReviewCommandHandler`
-- `[BE-INTERFACES]` `SuppliersController.MarkUnderReview` — retorna 204 No Content
-- `[BE-TEST]` Unit test: transición exitosa, supplier eliminado retorna 404
+- `[BE-INTERFACES]` `SuppliersController.MarkUnderReview` — returns 204 No Content
+- `[BE-TEST]` Unit test: successful transition, deleted supplier returns 404
 
 #### Acceptance Criteria
 
@@ -612,16 +612,16 @@ Endpoint `PATCH /api/suppliers/{supplierId}/under-review` que transiciona `Statu
 
 | Aspect | Implementation |
 |--------|---------------|
-| Soft delete | `Supplier.Delete()` establece `IsDeleted = true`; **no modifica `Status`**; filtrado en listados con `WHERE is_deleted = 0`; `GetById` también retorna 404 para eliminados |
-| Rechazo de negocio | `Supplier.Reject()` establece `Status = REJECTED`; el registro **sigue visible** en listados (`isDeleted = false`); es una decisión de compliance, no eliminación |
-| TaxId | Exactamente 11 dígitos numéricos; validado con FluentValidation (`^\d{11}$`) y CHECK constraint en DB (`CHAR(11)`); inmutable tras creación |
-| Campos requeridos del proveedor | `legalName` (razón social), `commercialName` (nombre comercial), `taxId`, `country` — required; `website`, `annualBillingUsd` DECIMAL(18,2), `contactPhone`, `contactEmail`, `address` — opcionales |
-| Risk scoring por fuente | OFAC: score ≥ 0.85 → HIGH, ≥ 0.60 → MEDIUM, any match → LOW; World Bank: any match → HIGH (inhabilitación oficial); ICIJ: any match → LOW (leak, no sanción) |
-| Risk scoring final | `RiskLevel` = máximo entre todas las fuentes consultadas |
-| Auto-review | `Supplier.ApplyScreeningResult(HIGH)` automáticamente establece `Status = UNDER_REVIEW` |
-| Entries en ScreeningResult | Serializadas como JSON en `entries_json` (NVARCHAR MAX); `GET /api/screenings/{id}` las deserializa y retorna; el listado (`GET /api/screenings?supplierId=`) las omite |
-| ScreeningResult inmutabilidad | Sin `updated_at` en DB ni en EF Core config; nunca se actualiza un resultado existente |
-| Selección de fuentes | `RunScreeningCommand.Sources` (opcional); si null = todas las fuentes; validado contra ["ofac", "worldbank", "icij"] |
-| Cascade delete | `screening_results.supplier_id` FK con `ON DELETE CASCADE` — eliminar físicamente un supplier a nivel DB también elimina su historial |
-| Caching | `ScrapingOrchestrationService` cachea resultados por `(source, term)` por 10 minutos |
-| Implementation status | TS-SUP-000 a US-SUP-008 actualizados (v0.4.1–v0.5.1); US-SUP-009–011 pendientes |
+| Soft delete | `Supplier.Delete()` sets `IsDeleted = true`; **does not modify `Status`**; filtered from all listings with `WHERE is_deleted = 0`; `GetById` also returns 404 for deleted records |
+| Business rejection | `Supplier.Reject()` sets `Status = REJECTED`; record **remains visible** in listings (`isDeleted = false`); it is a compliance decision, not a deletion |
+| TaxId | Exactly 11 numeric digits; validated with FluentValidation (`^\d{11}$`) and a DB CHECK constraint (`CHAR(11)`); immutable after creation |
+| Required supplier fields | `legalName` (razón social), `commercialName` (nombre comercial), `taxId`, `country` — required; `website`, `annualBillingUsd` DECIMAL(18,2), `contactPhone`, `contactEmail`, `address` — optional |
+| Risk scoring per source | OFAC: score ≥ 0.85 → HIGH, ≥ 0.60 → MEDIUM, any match → LOW; World Bank: any match → HIGH (formally debarred); ICIJ: any match → LOW (journalistic leak, not an official sanction) |
+| Final risk level | `RiskLevel` = maximum across all queried sources |
+| Auto-review | `Supplier.ApplyScreeningResult(HIGH)` automatically sets `Status = UNDER_REVIEW` |
+| Entries in ScreeningResult | Serialized as JSON in `entries_json` (NVARCHAR MAX); `GET /api/screenings/{id}` deserializes and returns them; the listing (`GET /api/screenings?supplierId=`) omits them for lightweight responses |
+| ScreeningResult immutability | No `updated_at` in DB or EF Core config; an existing result is never updated |
+| Source selection | `RunScreeningCommand.Sources` (optional); if null = all sources; validated against ["ofac", "worldbank", "icij"] |
+| Cascade delete | `screening_results.supplier_id` FK with `ON DELETE CASCADE` — physically deleting a supplier at the DB level also removes its screening history |
+| Caching | `ScrapingOrchestrationService` caches results by `(source, term)` for 10 minutes |
+| Implementation status | TS-SUP-000 through US-SUP-008 updated (v0.4.1–v0.5.1); US-SUP-009–011 pending |

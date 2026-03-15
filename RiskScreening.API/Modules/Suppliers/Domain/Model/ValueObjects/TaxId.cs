@@ -5,7 +5,7 @@ using RiskScreening.API.Shared.Domain.Model.ValueObjects;
 namespace RiskScreening.API.Modules.Suppliers.Domain.Model.ValueObjects;
 
 /// <summary>Supplier tax identification number — exactly 11 digits (e.g., Peru RUC).</summary>
-public partial record TaxId : ValueObject
+public partial record TaxId : ValueObject, IComparable<TaxId>
 {
     public string Value { get; }
 
@@ -33,6 +33,11 @@ public partial record TaxId : ValueObject
     public static implicit operator string(TaxId taxId)
     {
         return taxId.Value;
+    }
+
+    public int CompareTo(TaxId? other)
+    {
+        return string.Compare(Value, other?.Value, StringComparison.Ordinal);
     }
 
     [GeneratedRegex(@"^\d{11}$")]

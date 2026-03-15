@@ -31,7 +31,7 @@ All paginated endpoints accept a `PageRequest` object (query string parameters):
 |-----------|------|---------|-----|-------------|
 | `page` | `int` | `0` | — | Zero-based page index |
 | `size` | `int` | `20` | `100` | Number of items per page |
-| `sortBy` | `string?` | `null` | — | Field name to sort by |
+| `sortBy` | `string?` | `null` | — | Field name to sort by (whitelisted per entity) |
 | `sortDirection` | `string?` | `asc` | — | `asc` or `desc` |
 
 A maximum page size of `100` is enforced by FluentValidation to prevent clients from issuing unbounded requests.
@@ -57,6 +57,13 @@ All paginated endpoints return a `PageResponse<T>` envelope:
 ```
 
 `PageMetadata` fields are pre-computed server-side so the client never needs to derive `hasNext`, `hasPrevious`, or `totalPages` itself.
+
+### Sorting — `SortConfiguration<T>` and tiebreaker
+
+Sort fields are whitelisted per entity in a concrete `SortConfiguration<T>` subclass.
+`SortConfiguration<T>` resolves the requested field name to a typed `Expression<Func<T, TKey>>` and calls `Queryable.OrderBy<T, TKey>` via reflection, preserving the actual `TKey` so EF Core generates correct `ORDER BY` clauses for value-converted columns.
+
+An optional `TiebreakerField` property (always appended as `ThenBy ASC`) ensures deterministic row order when the primary sort key has duplicate values — a requirement for stable offset-based pagination. Derived configurations override this property to specify the entity's unique primary key.
 
 ### Shared placement
 
@@ -105,6 +112,7 @@ Cursor-based pagination is better suited for high-volume, real-time feeds (e.g. 
 - `PageMetadata` boolean helpers (`hasNext`, `hasPrevious`, `first`, `last`) simplify frontend pagination logic.
 - `PageRequest` validation (max size 100) is enforced via FluentValidation — consistent error response on violation.
 - Swapping the backing implementation (e.g. Dapper instead of EF Core) does not change the API contract.
+- `TiebreakerField` on `SortConfiguration<T>` guarantees deterministic row order across pages when the primary sort key has duplicates (e.g. `updatedAt`), eliminating the page-drift problem for the most common use case.
 
 ### Negative / Mitigations
 

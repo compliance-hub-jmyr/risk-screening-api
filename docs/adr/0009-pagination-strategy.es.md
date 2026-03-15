@@ -31,7 +31,7 @@ Todos los endpoints paginados aceptan un objeto `PageRequest` (parámetros de qu
 |-----------|------|---------|--------|-------------|
 | `page` | `int` | `0` | — | Índice de página base-cero |
 | `size` | `int` | `20` | `100` | Número de ítems por página |
-| `sortBy` | `string?` | `null` | — | Nombre del campo por el que ordenar |
+| `sortBy` | `string?` | `null` | — | Nombre del campo por el que ordenar (lista blanca por entidad) |
 | `sortDirection` | `string?` | `asc` | — | `asc` o `desc` |
 
 Un tamaño máximo de página de `100` es aplicado por FluentValidation para prevenir solicitudes sin límite.
@@ -57,6 +57,13 @@ Todos los endpoints paginados devuelven un envelope `PageResponse<T>`:
 ```
 
 Los campos de `PageMetadata` son pre-calculados en el servidor para que el cliente nunca necesite derivar `hasNext`, `hasPrevious` ni `totalPages` por su cuenta.
+
+### Ordenamiento — `SortConfiguration<T>` y tiebreaker
+
+Los campos de ordenamiento están en lista blanca por entidad en una subclase concreta de `SortConfiguration<T>`.
+`SortConfiguration<T>` resuelve el nombre del campo solicitado a una `Expression<Func<T, TKey>>` tipada y llama a `Queryable.OrderBy<T, TKey>` via reflexión, preservando el `TKey` real para que EF Core genere cláusulas `ORDER BY` correctas para columnas mapeadas con value converters.
+
+Una propiedad opcional `TiebreakerField` (siempre añadida como `ThenBy ASC`) garantiza un orden de filas determinista cuando la clave de ordenamiento primaria tiene valores duplicados — requisito para una paginación offset estable. Las configuraciones derivadas sobrescriben esta propiedad para especificar la clave primaria única de la entidad.
 
 ### Ubicación en Shared
 
@@ -105,6 +112,7 @@ La paginación cursor-based es más adecuada para feeds de alto volumen en tiemp
 - Los booleanos de `PageMetadata` (`hasNext`, `hasPrevious`, `first`, `last`) simplifican la lógica de paginación en el frontend.
 - La validación de `PageRequest` (tamaño máximo 100) se aplica via FluentValidation — respuesta de error consistente ante violaciones.
 - Cambiar la implementación subyacente (ej. Dapper en lugar de EF Core) no modifica el contrato de la API.
+- `TiebreakerField` en `SortConfiguration<T>` garantiza un orden de filas determinista entre páginas cuando la clave de ordenamiento primaria tiene duplicados (ej. `updatedAt`), eliminando el problema de desplazamiento de páginas en el caso de uso más frecuente.
 
 ### Negativas / Mitigaciones
 
