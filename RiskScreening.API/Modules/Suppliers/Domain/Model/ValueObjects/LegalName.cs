@@ -4,7 +4,7 @@ using RiskScreening.API.Shared.Domain.Model.ValueObjects;
 namespace RiskScreening.API.Modules.Suppliers.Domain.Model.ValueObjects;
 
 /// <summary>Supplier legal name (razón social) — alphanumeric, max 200 characters.</summary>
-public record LegalName : ValueObject
+public record LegalName : ValueObject, IComparable<LegalName>
 {
     public const int MaxLength = 200;
 
@@ -34,5 +34,10 @@ public record LegalName : ValueObject
     public static implicit operator string(LegalName name)
     {
         return name.Value;
+    }
+
+    public int CompareTo(LegalName? other)
+    {
+        return string.Compare(Value, other?.Value, StringComparison.Ordinal);
     }
 }

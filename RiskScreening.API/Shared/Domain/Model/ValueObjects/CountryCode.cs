@@ -3,7 +3,7 @@ using RiskScreening.API.Shared.Domain.Exceptions;
 namespace RiskScreening.API.Shared.Domain.Model.ValueObjects;
 
 /// <summary>ISO 3166-1 alpha-2 country code.</summary>
-public record CountryCode : ValueObject
+public record CountryCode : ValueObject, IComparable<CountryCode>
 {
     public string Value { get; }
 
@@ -31,6 +31,11 @@ public record CountryCode : ValueObject
     public static implicit operator string(CountryCode code)
     {
         return code.Value;
+    }
+
+    public int CompareTo(CountryCode? other)
+    {
+        return string.Compare(Value, other?.Value, StringComparison.Ordinal);
     }
 
     /// <summary>All valid ISO 3166-1 alpha-2 codes — a single source of truth.</summary>
