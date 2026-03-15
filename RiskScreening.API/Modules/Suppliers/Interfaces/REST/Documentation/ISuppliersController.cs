@@ -45,6 +45,14 @@ public interface ISuppliersController
     [SwaggerResponse(StatusCodes.Status404NotFound, "Supplier not found.")]
     Task<IActionResult> GetById(string id, CancellationToken ct);
 
+    /// <summary>Update an existing supplier.</summary>
+    [SwaggerOperation(Summary = "Update supplier", Tags = ["Suppliers"])]
+    [SwaggerResponse(StatusCodes.Status200OK, "Supplier updated.", typeof(SupplierResponse))]
+    [SwaggerResponse(StatusCodes.Status400BadRequest, "Validation error.")]
+    [SwaggerResponse(StatusCodes.Status404NotFound, "Supplier not found.")]
+    [SwaggerResponse(StatusCodes.Status409Conflict, "Tax ID already exists.")]
+    Task<IActionResult> Update(string id, [FromBody] UpdateSupplierRequest request, CancellationToken ct);
+
     /// <summary>Soft-delete a supplier.</summary>
     [SwaggerOperation(Summary = "Delete supplier", Tags = ["Suppliers"])]
     [SwaggerResponse(StatusCodes.Status204NoContent, "Supplier deleted.")]
