@@ -19,7 +19,7 @@
 Como oficial de compliance, quiero buscar en la lista de Nacionales Especialmente Designados (SDN) de OFAC por nombre, para verificar rapidamente si una persona o entidad aparece en las sanciones del Departamento del Tesoro de EE.UU.
 
 **Entregable:**
-Endpoint `GET /api/lists/ofac?q={termino}` que consulta el feed XML de la lista SDN de OFAC, filtra entradas cuyo nombre contiene el termino de busqueda (sin distincion de mayusculas), y retorna un `ScrapingResponse` con el conteo de coincidencias y las entradas encontradas. Los resultados se cachean por 10 minutos por termino de busqueda.
+Endpoint `GET /api/lists/search?q={termino}&sources=ofac` que consulta el feed XML de la lista SDN de OFAC, filtra entradas cuyo nombre contiene el termino de busqueda (sin distincion de mayusculas), y retorna un `ScrapingResponse` con el conteo de coincidencias y las entradas encontradas. Los resultados se cachean por 10 minutos por termino de busqueda.
 
 **Dependencias:**
 - `US-IAM-001`: autenticacion JWT
@@ -47,27 +47,27 @@ Endpoint `GET /api/lists/ofac?q={termino}` que consulta el feed XML de la lista 
   - Los campos no aplicables a una fuente se dejan como `null`
 - `[BE-DOMAIN]` Record `SearchResult` con `Hits`, `Entries`, estatico `Empty` y fabrica `Merge`
 - `[BE-INFRA]` Interfaz `IScrapingSource` con `SourceName` y `SearchAsync(term, ct)`
-- `[BE-INFRA]` `OfacScrapingSource` — descarga el ZIP SDN de `https://sdn.ofac.treas.gov/SDN_XML.zip`, descomprime en memoria, parsea XML con `XDocument`, busqueda de nombre case-insensitive; mapea a `RiskEntry` con `ListSource = "OFAC"`, `Name`, `Address`, `Type`, `List`, `Programs`, `Score`; retorna `SearchResult.Empty` ante cualquier fallo
+- `[BE-INFRA]` `OfacScrapingSource` — descarga el ZIP SDN de `https://sdn.ofac.treas.gov/SDN_XML.zip` (fuente de datos programatica; el assessment referencia `https://sanctionssearch.ofac.treas.gov/` que es un formulario web sin API REST), descomprime en memoria, parsea XML con `XDocument`, busqueda de nombre case-insensitive; mapea a `RiskEntry` con `ListSource = "OFAC"`, `Name`, `Address`, `Type`, `List`, `Programs`, `Score`; retorna `SearchResult.Empty` ante cualquier fallo
 - `[BE-INFRA]` `ScrapingOrchestrationService.SearchSourceAsync("ofac", term)` — cachea resultado por `scraping:ofac:{term}` por 10 min
-- `[BE-INTERFACES]` `ListsController.SearchOfac` — requiere parametro `q`; delega a `SearchSourceAsync`; sujeto a rate limiting (20 req/min por IP)
+- `[BE-INTERFACES]` `ListsController.Search` con `sources=ofac` — requiere parametro `q`; delega a `SearchAllAsync` con filtro de fuente; sujeto a rate limiting (20 req/min por IP)
 - `[BE-TEST]` Unit test: entradas coincidentes retornadas con todos los campos OFAC, sin coincidencias retorna resultado vacio, `q` ausente retorna 400
 
 #### Criterios de Aceptacion
 
 **Escenario 1: Coincidencias encontradas**
 - Given que estoy autenticado
-- And envio `GET /api/lists/ofac?q=john doe`
+- And envio `GET /api/lists/search?q=john doe&sources=ofac`
 - When la peticion se procesa
 - Then recibo HTTP 200 con `{ hits: N, entries: [...] }`
 - And cada entrada incluye `listSource = "OFAC"`, `name`, `address`, `type`, `list`, `programs`, `score`
 
 **Escenario 2: Sin coincidencias**
 - Given que el termino de busqueda no aparece en la lista SDN de OFAC
-- When envio `GET /api/lists/ofac?q=entidad desconocida xyz`
+- When envio `GET /api/lists/search?q=entidad desconocida xyz&sources=ofac`
 - Then recibo HTTP 200 con `{ hits: 0, entries: [] }`
 
 **Escenario 3: Parametro de busqueda ausente**
-- Given que envio `GET /api/lists/ofac` sin el parametro `q`
+- Given que envio `GET /api/lists/search?sources=ofac` sin el parametro `q`
 - When la peticion llega al controlador
 - Then recibo HTTP 400 Bad Request
 
@@ -83,7 +83,7 @@ Endpoint `GET /api/lists/ofac?q={termino}` que consulta el feed XML de la lista 
 
 **Escenario 6: Cache hit**
 - Given que una peticion previa para el mismo termino se realizo en los ultimos 10 minutos
-- When envio `GET /api/lists/ofac?q=john doe` nuevamente
+- When envio `GET /api/lists/search?q=john doe&sources=ofac` nuevamente
 - Then recibo HTTP 200 con el resultado en cache (sin llamada HTTP externa)
 
 ---
@@ -96,7 +96,7 @@ Endpoint `GET /api/lists/ofac?q={termino}` que consulta el feed XML de la lista 
 Como oficial de compliance, quiero buscar en la lista de firmas excluidas y co-excluidas del Banco Mundial, para identificar proveedores que hayan sido sancionados de participar en proyectos financiados por el Banco Mundial.
 
 **Entregable:**
-Endpoint `GET /api/lists/worldbank?q={termino}` que realiza scraping de la pagina HTML de firmas excluidas del Banco Mundial usando `HtmlAgilityPack`, extrae las filas de tabla coincidentes y retorna un `ScrapingResponse`. Los resultados se cachean por 10 minutos por termino de busqueda.
+Endpoint `GET /api/lists/search?q={termino}&sources=worldbank` que realiza scraping de la pagina HTML de firmas excluidas del Banco Mundial usando `HtmlAgilityPack`, extrae las filas de tabla coincidentes y retorna un `ScrapingResponse`. Los resultados se cachean por 10 minutos por termino de busqueda.
 
 **Dependencias:**
 - `US-SCR-001` (misma infraestructura, mismo patron)
@@ -107,21 +107,21 @@ Endpoint `GET /api/lists/worldbank?q={termino}` que realiza scraping de la pagin
 
 - `[BE-INFRA]` `WorldBankScrapingSource` — obtiene `https://projects.worldbank.org/en/projects-operations/procurement/debarred-firms?srchTerm={term}`, parsea tabla HTML con `HtmlAgilityPack`, extrae nombre de firma (mapeado a `Name`), `Address`, `Country`, `FromDate`, `ToDate`, `Grounds`; mapea a `RiskEntry` con `ListSource = "WORLD_BANK"`; retorna `SearchResult.Empty` ante fallos
 - `[BE-INFRA]` `ScrapingOrchestrationService.SearchSourceAsync("worldbank", term)` — cachea resultado por `scraping:worldbank:{term}` por 10 min
-- `[BE-INTERFACES]` `ListsController.SearchWorldBank` — requiere `q`; sujeto a rate limiting
+- `[BE-INTERFACES]` `ListsController.Search` con `sources=worldbank` — requiere `q`; sujeto a rate limiting
 - `[BE-TEST]` Unit test: filas coincidentes retornadas, fallo de parse HTML retorna resultado vacio
 
 #### Criterios de Aceptacion
 
 **Escenario 1: Coincidencias encontradas**
 - Given que estoy autenticado
-- And envio `GET /api/lists/worldbank?q=acme corp`
+- And envio `GET /api/lists/search?q=acme corp&sources=worldbank`
 - When la peticion se procesa
 - Then recibo HTTP 200 con `{ hits: N, entries: [...] }`
 - And cada entrada incluye `listSource = "WORLD_BANK"`, `name`, `address`, `country`, `fromDate`, `toDate`, `grounds`
 
 **Escenario 2: Sin coincidencias**
 - Given que el termino de busqueda no aparece en la tabla de firmas excluidas del Banco Mundial
-- When envio `GET /api/lists/worldbank?q=entidad desconocida xyz`
+- When envio `GET /api/lists/search?q=entidad desconocida xyz&sources=worldbank`
 - Then recibo HTTP 200 con `{ hits: 0, entries: [] }`
 
 **Escenario 3: Fuente Banco Mundial no disponible**
@@ -144,7 +144,7 @@ Endpoint `GET /api/lists/worldbank?q={termino}` que realiza scraping de la pagin
 Como oficial de compliance, quiero buscar en la base de datos Offshore Leaks del ICIJ, para identificar proveedores vinculados a entidades offshore mencionadas en Panama Papers, Paradise Papers u otras investigaciones similares.
 
 **Entregable:**
-Endpoint `GET /api/lists/icij?q={termino}` que consulta la API JSON publica del ICIJ, deserializa el array `nodes` y retorna un `ScrapingResponse`. Los resultados se cachean por 10 minutos por termino de busqueda.
+Endpoint `GET /api/lists/search?q={termino}&sources=icij` que consulta la API JSON publica del ICIJ, deserializa el array `nodes` y retorna un `ScrapingResponse`. Los resultados se cachean por 10 minutos por termino de busqueda.
 
 **Dependencias:**
 - `US-SCR-001` (misma infraestructura, mismo patron)
@@ -155,14 +155,14 @@ Endpoint `GET /api/lists/icij?q={termino}` que consulta la API JSON publica del 
 
 - `[BE-INFRA]` `IcijScrapingSource` — obtiene `https://offshoreleaks.icij.org/api/nodes?q={term}`, deserializa array `nodes` con `System.Text.Json` en DTOs internos `IcijNode`; mapea a `RiskEntry` con `ListSource = "ICIJ"`, `Name` (caption del nodo con fallback a name), `Jurisdiction`, `LinkedTo`, `DataFrom`; los campos OFAC/Banco Mundial quedan en `null`; retorna `SearchResult.Empty` ante fallos
 - `[BE-INFRA]` `ScrapingOrchestrationService.SearchSourceAsync("icij", term)` — cachea resultado por `scraping:icij:{term}` por 10 min
-- `[BE-INTERFACES]` `ListsController.SearchIcij` — requiere `q`; sujeto a rate limiting
+- `[BE-INTERFACES]` `ListsController.Search` con `sources=icij` — requiere `q`; sujeto a rate limiting
 - `[BE-TEST]` Unit test: nodos deserializados correctamente, array `nodes` vacio retorna resultado vacio
 
 #### Criterios de Aceptacion
 
 **Escenario 1: Coincidencias encontradas**
 - Given que estoy autenticado
-- And envio `GET /api/lists/icij?q=mossack fonseca`
+- And envio `GET /api/lists/search?q=mossack fonseca&sources=icij`
 - When la peticion se procesa
 - Then recibo HTTP 200 con `{ hits: N, entries: [...] }`
 - And cada entrada incluye `listSource = "ICIJ"`, `name`, `jurisdiction`, `linkedTo`, `dataFrom`
@@ -192,7 +192,7 @@ Endpoint `GET /api/lists/icij?q={termino}` que consulta la API JSON publica del 
 Como oficial de compliance, quiero buscar en las tres listas de riesgo con una sola peticion, para obtener una vista consolidada del riesgo en todas las fuentes sin realizar tres llamadas API separadas.
 
 **Entregable:**
-Endpoint `GET /api/lists/all?q={termino}` que ejecuta las tres consultas a fuentes en paralelo via `Task.WhenAll`, combina los resultados con `SearchResult.Merge` y retorna un unico `ScrapingResponse` con el conteo total de `hits` y la lista unificada de entradas. Cada resultado de fuente individual se cachea independientemente.
+Endpoint `GET /api/lists/search?q={termino}` (sin parametro `sources`, o `sources=ofac,worldbank,icij`) que ejecuta las tres consultas a fuentes en paralelo via `Task.WhenAll`, combina los resultados con `SearchResult.Merge` y retorna un unico `ScrapingResponse` con el conteo total de `hits` y la lista unificada de entradas. Cada resultado de fuente individual se cachea independientemente. El parametro `sources` acepta un subconjunto separado por comas para consultar fuentes especificas; cuando se omite, se consultan todas las fuentes registradas.
 
 **Dependencias:**
 - `US-SCR-001`, `US-SCR-002`, `US-SCR-003`
@@ -201,16 +201,16 @@ Endpoint `GET /api/lists/all?q={termino}` que ejecuta las tres consultas a fuent
 
 #### Tareas
 
-- `[BE-INFRA]` `ScrapingOrchestrationService.SearchAllAsync(term)` — llama todas las instancias `IScrapingSource` registradas en paralelo via `Task.WhenAll`, combina con `SearchResult.Merge(results)`
+- `[BE-INFRA]` `ScrapingOrchestrationService.SearchAllAsync(term, sourceNames?)` — llama las instancias `IScrapingSource` seleccionadas (o todas) en paralelo via `Task.WhenAll`, combina con `SearchResult.Merge(results)`
 - `[BE-DOMAIN]` `SearchResult.Merge(IEnumerable<SearchResult>)` — suma `Hits` y concatena listas `Entries` de todas las fuentes
-- `[BE-INTERFACES]` `ListsController.SearchAll` — requiere `q`; delega a `SearchAllAsync`; sujeto a rate limiting
+- `[BE-INTERFACES]` `ListsController.Search` — endpoint unificado `GET /api/lists/search?q={term}&sources={csv}`; requiere `q`; `sources` opcional (separado por comas: ofac, worldbank, icij); valida nombres de fuente contra whitelist; delega a `SearchAllAsync`; sujeto a rate limiting
 - `[BE-TEST]` Unit test: resultados de las tres fuentes combinados correctamente; fallo de una fuente no impide que las otras dos retornen resultados
 
 #### Criterios de Aceptacion
 
 **Escenario 1: Coincidencias en multiples fuentes**
 - Given que estoy autenticado
-- And envio `GET /api/lists/all?q=global corp`
+- And envio `GET /api/lists/search?q=global corp` (sin parametro `sources` — consulta todas)
 - When la peticion se procesa
 - Then recibo HTTP 200 con `{ hits: N, entries: [...] }`
 - And `hits` es igual a la suma de los conteos de cada fuente
@@ -309,8 +309,9 @@ Integracion de fuentes adicionales (Sanciones UE, Consejo de Seguridad ONU, INTE
 | Formato de clave de cache | `scraping:{FUENTE}:{termino}` — por fuente, por termino; TTL de 10 minutos |
 | Tolerancia a fallos | Cada `IScrapingSource` envuelve toda su implementacion en try/catch y retorna `SearchResult.Empty` ante cualquier error — el orquestador nunca propaga excepciones a nivel de fuente |
 | Rate limiting | Basado en IP via `AspNetCoreRateLimit` (infraestructura compartida) con reglas escalonadas: sign-in (5/min), lists (20/min), API general (100/min). `RateLimitResponseMiddleware` reescribe 429 al formato estandar `ErrorResponse` con `RATE_LIMIT_EXCEEDED` (7000) y header `Retry-After` |
-| Ejecucion paralela | `SearchAllAsync` usa `Task.WhenAll` — las tres fuentes se consultan concurrentemente; la latencia total es la de la fuente mas lenta, no la suma |
-| Parseo OFAC | Descarga y descomprime el ZIP SDN completo en memoria en cada cache miss; sin escrituras en disco local |
+| Endpoint unificado | Un solo `GET /api/lists/search?q={term}&sources={csv}` — el parametro `sources` es opcional (separado por comas: ofac, worldbank, icij); cuando se omite, se consultan todas las fuentes. El controlador valida los nombres de fuente contra una whitelist. Sin endpoints individuales por fuente |
+| Ejecucion paralela | `SearchAllAsync` usa `Task.WhenAll` — todas las fuentes seleccionadas se consultan concurrentemente; la latencia total es la de la fuente mas lenta, no la suma |
+| Parseo OFAC | Descarga SDN_XML.zip de `sdn.ofac.treas.gov` (la URL del assessment `sanctionssearch.ofac.treas.gov` es un formulario web sin API REST); descomprime en memoria en cada cache miss; sin escrituras en disco |
 | Parseo Banco Mundial | `HtmlAgilityPack` se usa para parseo robusto de tabla HTML |
 | Integracion ICIJ | API REST JSON; deserializacion con `System.Text.Json`; caption del nodo mapeado al campo `name` |
 | Sin deduplicacion | `SearchResult.Merge` suma hits y concatena entradas; una entidad presente en multiples listas se cuenta multiples veces — limitacion conocida de v1.0 |
