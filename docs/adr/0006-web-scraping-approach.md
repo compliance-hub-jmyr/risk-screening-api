@@ -36,7 +36,8 @@ This approach is simpler to implement and operate in Phase 1, avoids the complex
 ### Strategy by source
 
 #### OFAC SDN
-- Source: `https://sdn.ofac.treas.gov/SDN_XML.zip` (public ZIP containing SDN XML)
+- Assessment reference: `https://sanctionssearch.ofac.treas.gov/` (web-only form, no REST API)
+- Programmatic source: `https://sdn.ofac.treas.gov/SDN_XML.zip` (public ZIP containing SDN XML)
 - Method: Download ZIP, decompress in-memory, parse XML with `System.Xml.Linq`
 - Cache key: `scraping:ofac:{normalizedQuery}`
 - TTL: **10 minutes**
@@ -53,14 +54,16 @@ This approach is simpler to implement and operate in Phase 1, avoids the complex
 - Cache key: `scraping:icij:{normalizedQuery}`
 - TTL: **10 minutes**
 
-### Error handling
+### Error handling (fault-tolerant)
 
 ```
 If a live fetch fails (timeout, HTTP error, parse error):
   - Log error at WARNING level
-  - Return a structured error response (503 / partial result)
+  - Return SearchResult.Empty (hits: 0, entries: []) — NOT an HTTP error
   - Do NOT write a failed result to cache
   - The next request will retry the live fetch
+  - When searching all sources (GET /api/lists/search?q=term), a single source failure
+    does not prevent other sources from returning results
 ```
 
 ## Consequences

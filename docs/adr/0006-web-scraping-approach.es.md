@@ -36,7 +36,8 @@ Este enfoque es más simple de implementar y operar en la Fase 1, evita la compl
 ### Estrategia por fuente
 
 #### OFAC SDN
-- Fuente: `https://sdn.ofac.treas.gov/SDN_XML.zip` (ZIP público con XML SDN)
+- Referencia del assessment: `https://sanctionssearch.ofac.treas.gov/` (formulario web, sin API REST)
+- Fuente programática: `https://sdn.ofac.treas.gov/SDN_XML.zip` (ZIP público con XML SDN)
 - Método: Descarga ZIP, descompresión en memoria, parsing XML con `System.Xml.Linq`
 - Clave de cache: `scraping:ofac:{consultaNormalizada}`
 - TTL: **10 minutos**
@@ -53,14 +54,16 @@ Este enfoque es más simple de implementar y operar en la Fase 1, evita la compl
 - Clave de cache: `scraping:icij:{consultaNormalizada}`
 - TTL: **10 minutos**
 
-### Manejo de errores
+### Manejo de errores (tolerante a fallos)
 
 ```
 Si un fetch en vivo falla (timeout, error HTTP, error de parsing):
   - Registrar error en nivel WARNING
-  - Retornar una respuesta de error estructurada (503 / resultado parcial)
+  - Retornar SearchResult.Empty (hits: 0, entries: []) — NO un error HTTP
   - NO escribir un resultado fallido en cache
   - La próxima solicitud reintentará el fetch en vivo
+  - Al buscar en todas las fuentes (GET /api/lists/search?q=term), el fallo de una fuente
+    no impide que las otras retornen resultados
 ```
 
 ## Consecuencias
