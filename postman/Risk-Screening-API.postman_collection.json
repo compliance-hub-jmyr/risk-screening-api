@@ -1,0 +1,514 @@
+{
+  "info": {
+    "name": "Risk Screening API",
+    "description": "REST API for automated supplier due diligence and cross-referencing against international high-risk lists (OFAC SDN, World Bank Debarred Firms, ICIJ Offshore Leaks).\n\n## Authentication\nAll endpoints except `POST /authentication/sign-in` require a JWT Bearer token.\n\nRun **Sign In** first — the token is saved automatically to the `token` collection variable and reused in all subsequent requests.\n\n## Modules\n- **Authentication** — sign-in, current user profile\n- **Lists (Scraping)** — search OFAC, World Bank, ICIJ\n- **Suppliers** — full CRUD for supplier management",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5215",
+      "description": "Base URL. Change to the Azure Container Apps URL for production."
+    },
+    {
+      "key": "token",
+      "value": "",
+      "description": "JWT Bearer token. Set automatically after running Sign In."
+    },
+    {
+      "key": "supplierId",
+      "value": "",
+      "description": "Supplier ID. Set manually after creating a supplier."
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "description": "Sign-in and current user profile endpoints.",
+      "item": [
+        {
+          "name": "Sign In",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const json = pm.response.json();",
+                  "    pm.collectionVariables.set('token', json.token);",
+                  "    console.log('Token saved to collection variable.');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Api-Version", "value": "1" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@riskscreening.com\",\n  \"password\": \"Admin123!\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/authentication/sign-in",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "authentication", "sign-in"]
+            },
+            "description": "Authenticates with email and password. Returns a JWT Bearer token valid for 24 hours.\n\nThe token is automatically saved to the `token` collection variable."
+          },
+          "response": [
+            {
+              "name": "200 OK — Successful login",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n  \"email\": \"admin@riskscreening.com\",\n  \"username\": \"admin\",\n  \"roles\": [\"ADMIN\"]\n}"
+            },
+            {
+              "name": "401 Unauthorized — Invalid credentials",
+              "status": "Unauthorized",
+              "code": 401,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"code\": \"INVALID_CREDENTIALS\",\n  \"message\": \"Invalid email or password.\"\n}"
+            },
+            {
+              "name": "400 Bad Request — Validation error",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"code\": \"VALIDATION_ERROR\",\n  \"message\": \"One or more validation errors occurred.\",\n  \"errors\": {\n    \"email\": [\"'Email' must not be empty.\"]\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Current User",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Api-Version", "value": "1" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/authentication/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "authentication", "me"]
+            },
+            "description": "Returns the profile of the currently authenticated user extracted from the JWT token."
+          },
+          "response": [
+            {
+              "name": "200 OK — User profile",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n  \"email\": \"admin@riskscreening.com\",\n  \"username\": \"admin\",\n  \"roles\": [\"ADMIN\"]\n}"
+            },
+            {
+              "name": "401 Unauthorized — Missing or expired token",
+              "status": "Unauthorized",
+              "code": 401,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"code\": \"UNAUTHORIZED\",\n  \"message\": \"Authorization token is missing or invalid.\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Lists — Risk List Search",
+      "description": "Search international high-risk lists: OFAC SDN, World Bank Debarred Firms, and ICIJ Offshore Leaks.\n\n**Rate limit:** 20 requests/minute per client IP.",
+      "item": [
+        {
+          "name": "Search All Sources",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Api-Version", "value": "1" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/lists/search?q=lazarus group",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "lists", "search"],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "lazarus group",
+                  "description": "Entity name to search (max 50 chars for ICIJ compatibility)"
+                }
+              ]
+            },
+            "description": "Searches all three sources (OFAC, World Bank, ICIJ) in parallel when no `sources` filter is specified."
+          },
+          "response": [
+            {
+              "name": "200 OK — Results found",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"hits\": 3,\n  \"entries\": [\n    {\n      \"listSource\": \"OFAC\",\n      \"name\": \"LAZARUS GROUP\",\n      \"address\": \"Korea, North\",\n      \"type\": \"Entity\",\n      \"list\": \"SDN\",\n      \"programs\": [\"DPRK3\"],\n      \"score\": 1.0,\n      \"country\": null,\n      \"fromDate\": null,\n      \"toDate\": null,\n      \"grounds\": null,\n      \"jurisdiction\": null,\n      \"linkedTo\": null,\n      \"dataFrom\": null\n    }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Search OFAC Only",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Api-Version", "value": "1" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/lists/search?q=lazarus group&sources=ofac",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "lists", "search"],
+              "query": [
+                { "key": "q", "value": "lazarus group" },
+                { "key": "sources", "value": "ofac", "description": "Filter to OFAC SDN only" }
+              ]
+            },
+            "description": "Searches only the OFAC SDN List. Returns Name, Address, Type, Program(s), List, Score."
+          },
+          "response": []
+        },
+        {
+          "name": "Search World Bank Only",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Api-Version", "value": "1" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/lists/search?q=national bio-medical&sources=worldbank",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "lists", "search"],
+              "query": [
+                { "key": "q", "value": "national bio-medical" },
+                { "key": "sources", "value": "worldbank", "description": "Filter to World Bank Debarred Firms only" }
+              ]
+            },
+            "description": "Searches only the World Bank Debarred Firms list. Returns Firm Name, Address, Country, From Date, To Date, Grounds."
+          },
+          "response": [
+            {
+              "name": "200 OK — World Bank match",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"hits\": 1,\n  \"entries\": [\n    {\n      \"listSource\": \"WORLD_BANK\",\n      \"name\": \"National Bio-Medical\",\n      \"address\": \"123 Medical Ave, Lagos\",\n      \"type\": null,\n      \"list\": null,\n      \"programs\": null,\n      \"score\": null,\n      \"country\": \"Nigeria\",\n      \"fromDate\": \"2020-01-15\",\n      \"toDate\": \"Permanent\",\n      \"grounds\": \"Fraudulent practice\",\n      \"jurisdiction\": null,\n      \"linkedTo\": null,\n      \"dataFrom\": null\n    }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Search ICIJ Only",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Api-Version", "value": "1" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/lists/search?q=mossack fonseca&sources=icij",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "lists", "search"],
+              "query": [
+                { "key": "q", "value": "mossack fonseca" },
+                { "key": "sources", "value": "icij", "description": "Filter to ICIJ Offshore Leaks only" }
+              ]
+            },
+            "description": "Searches only the ICIJ Offshore Leaks Database using headless Chromium. Returns Entity, Jurisdiction, Linked To, Data From.\n\n**Note:** Search term is automatically truncated to 50 characters to match ICIJ's browser input limit."
+          },
+          "response": [
+            {
+              "name": "200 OK — ICIJ matches",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"hits\": 100,\n  \"entries\": [\n    {\n      \"listSource\": \"ICIJ\",\n      \"name\": \"MOSSACK FONSECA LIMITED.\",\n      \"address\": null,\n      \"type\": null,\n      \"list\": null,\n      \"programs\": null,\n      \"score\": null,\n      \"country\": null,\n      \"fromDate\": null,\n      \"toDate\": null,\n      \"grounds\": null,\n      \"jurisdiction\": \"Seychelles\",\n      \"linkedTo\": \"Panama\",\n      \"dataFrom\": \"Panama Papers\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Search OFAC + World Bank",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Api-Version", "value": "1" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/lists/search?q=global corp&sources=ofac&sources=worldbank",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "lists", "search"],
+              "query": [
+                { "key": "q", "value": "global corp" },
+                { "key": "sources", "value": "ofac" },
+                { "key": "sources", "value": "worldbank", "description": "Multiple sources can be combined" }
+              ]
+            },
+            "description": "Searches multiple sources simultaneously. Results are merged from both OFAC and World Bank."
+          },
+          "response": []
+        },
+        {
+          "name": "Error — Missing query parameter",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Api-Version", "value": "1" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/lists/search",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "lists", "search"]
+            },
+            "description": "Expected: 400 Bad Request. The `q` parameter is required."
+          },
+          "response": [
+            {
+              "name": "400 Bad Request — Missing q",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"code\": \"VALIDATION_ERROR\",\n  \"message\": \"One or more validation errors occurred.\",\n  \"errors\": {\n    \"q\": [\"'q' must not be empty.\"]\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Error — Invalid source value",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Api-Version", "value": "1" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/lists/search?q=test&sources=invalid",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "lists", "search"],
+              "query": [
+                { "key": "q", "value": "test" },
+                { "key": "sources", "value": "invalid" }
+              ]
+            },
+            "description": "Expected: 400 Bad Request. Valid sources are: `ofac`, `worldbank`, `icij`."
+          },
+          "response": [
+            {
+              "name": "400 Bad Request — Invalid source",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"code\": \"VALIDATION_ERROR\",\n  \"message\": \"One or more validation errors occurred.\",\n  \"errors\": {\n    \"sources\": [\"Invalid source 'invalid'. Valid values: ofac, worldbank, icij.\"]\n  }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Suppliers",
+      "description": "Full CRUD for supplier management. All endpoints require JWT authentication.",
+      "item": [
+        {
+          "name": "Create Supplier",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const json = pm.response.json();",
+                  "    if (json.id) {",
+                  "        pm.collectionVariables.set('supplierId', json.id);",
+                  "        console.log('Supplier ID saved: ' + json.id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Api-Version", "value": "1" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"legalName\": \"Acme Soluciones S.A.C.\",\n  \"commercialName\": \"Acme\",\n  \"taxId\": \"20512345678\",\n  \"country\": \"PE\",\n  \"contactPhone\": \"+51 999 888 777\",\n  \"contactEmail\": \"contacto@acme.pe\",\n  \"website\": \"https://acme.pe\",\n  \"address\": \"Av. Javier Prado 1234, Lima\",\n  \"annualBillingUsd\": 150000.50,\n  \"notes\": \"Proveedor referido por el área de compras\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/suppliers",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "suppliers"]
+            },
+            "description": "Creates a new supplier. Initial status is `PENDING`, risk level is `NONE`.\n\nThe created supplier ID is automatically saved to the `supplierId` collection variable."
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" },
+                { "key": "Location", "value": "/api/suppliers/abc123" }
+              ],
+              "body": "{\n  \"id\": \"abc123-...\",\n  \"legalName\": \"Acme Soluciones S.A.C.\",\n  \"commercialName\": \"Acme\",\n  \"taxId\": \"20512345678\",\n  \"country\": \"PE\",\n  \"status\": \"PENDING\",\n  \"riskLevel\": \"NONE\",\n  \"annualBillingUsd\": 150000.50,\n  \"createdAt\": \"2026-03-16T15:00:00Z\",\n  \"updatedAt\": \"2026-03-16T15:00:00Z\"\n}"
+            },
+            {
+              "name": "409 Conflict — Duplicate TaxId",
+              "status": "Conflict",
+              "code": 409,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"code\": \"BUSINESS_RULE_VIOLATION\",\n  \"message\": \"A supplier with tax ID '20512345678' already exists.\"\n}"
+            },
+            {
+              "name": "400 Bad Request — Validation error",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"code\": \"VALIDATION_ERROR\",\n  \"message\": \"One or more validation errors occurred.\",\n  \"errors\": {\n    \"taxId\": [\"Tax ID must be exactly 11 numeric digits.\"],\n    \"contactEmail\": [\"'Contact Email' is not a valid email address.\"]\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "List Suppliers",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Api-Version", "value": "1" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/suppliers?page=0&size=10&sortBy=updatedAt&sortDirection=DESC",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "suppliers"],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "10" },
+                { "key": "sortBy", "value": "updatedAt" },
+                { "key": "sortDirection", "value": "DESC" },
+                { "key": "legalName", "value": "", "disabled": true, "description": "Filter by legal name (partial match)" },
+                { "key": "commercialName", "value": "", "disabled": true },
+                { "key": "taxId", "value": "", "disabled": true },
+                { "key": "country", "value": "", "disabled": true, "description": "ISO 2-letter country code (e.g. PE, US)" },
+                { "key": "status", "value": "", "disabled": true, "description": "PENDING | APPROVED | REJECTED | UNDER_REVIEW" },
+                { "key": "riskLevel", "value": "", "disabled": true, "description": "NONE | LOW | MEDIUM | HIGH" }
+              ]
+            },
+            "description": "Returns a paginated list of active suppliers (soft-deleted excluded), sorted by last update date descending by default.\n\nAll filter parameters are optional and can be combined."
+          },
+          "response": [
+            {
+              "name": "200 OK — Paginated list",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"content\": [\n    {\n      \"id\": \"abc123-...\",\n      \"legalName\": \"Acme Soluciones S.A.C.\",\n      \"commercialName\": \"Acme\",\n      \"taxId\": \"20512345678\",\n      \"country\": \"PE\",\n      \"status\": \"PENDING\",\n      \"riskLevel\": \"NONE\",\n      \"updatedAt\": \"2026-03-16T15:00:00Z\"\n    }\n  ],\n  \"page\": {\n    \"number\": 0,\n    \"size\": 10,\n    \"totalElements\": 1,\n    \"totalPages\": 1\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "List Suppliers — With Filters",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Api-Version", "value": "1" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/suppliers?country=PE&status=PENDING&page=0&size=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "suppliers"],
+              "query": [
+                { "key": "country", "value": "PE" },
+                { "key": "status", "value": "PENDING" },
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "10" }
+              ]
+            },
+            "description": "Example combining country and status filters."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Supplier by ID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Api-Version", "value": "1" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/suppliers/{{supplierId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "suppliers", "{{supplierId}}"]
+            },
+            "description": "Returns the full profile of a single supplier. Returns 404 if the supplier does not exist or has been soft-deleted."
+          },
+          "response": [
+            {
+              "name": "200 OK — Supplier found",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"id\": \"abc123-...\",\n  \"legalName\": \"Acme Soluciones S.A.C.\",\n  \"commercialName\": \"Acme\",\n  \"taxId\": \"20512345678\",\n  \"country\": \"PE\",\n  \"contactPhone\": \"+51 999 888 777\",\n  \"contactEmail\": \"contacto@acme.pe\",\n  \"website\": \"https://acme.pe\",\n  \"address\": \"Av. Javier Prado 1234, Lima\",\n  \"annualBillingUsd\": 150000.50,\n  \"notes\": \"Proveedor referido por el área de compras\",\n  \"status\": \"PENDING\",\n  \"riskLevel\": \"NONE\",\n  \"createdAt\": \"2026-03-16T15:00:00Z\",\n  \"updatedAt\": \"2026-03-16T15:00:00Z\",\n  \"createdBy\": \"admin@riskscreening.com\",\n  \"updatedBy\": \"admin@riskscreening.com\"\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"code\": \"NOT_FOUND\",\n  \"message\": \"Supplier not found.\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Update Supplier",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Api-Version", "value": "1" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"legalName\": \"Acme Soluciones S.A.C.\",\n  \"commercialName\": \"Acme Peru\",\n  \"country\": \"PE\",\n  \"contactPhone\": \"+51 999 777 666\",\n  \"contactEmail\": \"ventas@acme.pe\",\n  \"website\": \"https://acme.pe\",\n  \"address\": \"Av. Arequipa 5678, Lima\",\n  \"annualBillingUsd\": 250000.00,\n  \"notes\": \"Actualizado con nueva información comercial\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/suppliers/{{supplierId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "suppliers", "{{supplierId}}"]
+            },
+            "description": "Updates all mutable fields of a supplier. `taxId` cannot be changed after creation."
+          },
+          "response": [
+            {
+              "name": "200 OK — Updated supplier",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"id\": \"abc123-...\",\n  \"legalName\": \"Acme Soluciones S.A.C.\",\n  \"commercialName\": \"Acme Peru\",\n  \"taxId\": \"20512345678\",\n  \"country\": \"PE\",\n  \"annualBillingUsd\": 250000.00,\n  \"status\": \"PENDING\",\n  \"riskLevel\": \"NONE\",\n  \"updatedAt\": \"2026-03-16T16:00:00Z\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Delete Supplier",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Api-Version", "value": "1" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/suppliers/{{supplierId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "suppliers", "{{supplierId}}"]
+            },
+            "description": "Soft-deletes a supplier (`isDeleted = true`). The record is preserved in the database for audit purposes but no longer appears in listings.\n\nThe business status (PENDING/APPROVED/REJECTED/UNDER_REVIEW) is NOT affected."
+          },
+          "response": [
+            {
+              "name": "204 No Content — Deleted",
+              "status": "No Content",
+              "code": 204,
+              "header": []
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"code\": \"NOT_FOUND\",\n  \"message\": \"Supplier not found.\"\n}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

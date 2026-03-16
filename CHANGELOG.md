@@ -13,6 +13,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 - `[DB]` Migration script `V007__seed_sample_suppliers.sql` — seeds sample supplier records for development and demo environments, covering a range of risk levels, statuses, and countries to exercise all screening and filtering scenarios.
 - `[DOCS]` `CONTRIBUTING.md` — added Local Development Setup section documenting prerequisites, database startup, environment configuration, Playwright browser installation, and API run command.
+- `[DOCS]` Postman collection (`postman/`) — ready-to-use collection with all endpoints (Authentication, Lists, Suppliers), example responses for all status codes, and auto-token script that saves the JWT after Sign In.
 
 ### Fixed
 
