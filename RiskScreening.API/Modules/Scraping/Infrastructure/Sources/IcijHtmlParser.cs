@@ -43,21 +43,25 @@ internal static partial class IcijHtmlParser
         var table = doc.DocumentNode.SelectSingleNode("//table[contains(@class,'table')]");
         if (table is null)
         {
-            logger.LogWarning("ICIJ: results table not found");
+            logger.LogDebug("ICIJ: results table not found - page may still be loading or no results available");
             return entries;
         }
 
         var rows = table.SelectNodes(".//tbody/tr");
         if (rows is null or { Count: 0 })
         {
-            logger.LogDebug("ICIJ: no result rows found");
+            logger.LogDebug("ICIJ: no result rows found - search completed with 0 matches");
             return entries;
         }
 
         foreach (var row in rows)
         {
             var cells = row.SelectNodes(".//td");
-            if (cells is null || cells.Count < 4) continue;
+            if (cells is null || cells.Count < 4) 
+            {
+                logger.LogDebug("ICIJ: Skipping row with insufficient columns (expected 4, got {Count})", cells?.Count ?? 0);
+                continue;
+            }
 
             // Columns: Entity | Jurisdiction | Linked To | Data From
             var name = CleanText(cells[0].InnerText);
