@@ -12,6 +12,7 @@
 ## Tabla de Contenido
 
 - [Descripción General](#descripción-general)
+- [Colección de Postman](#colección-de-postman)
 - [Arquitectura](#arquitectura)
 - [Estructura del Repositorio](#estructura-del-repositorio)
 - [Stack Tecnológico](#stack-tecnológico)
@@ -45,6 +46,23 @@ Aplicación SPA full-stack para que oficiales de compliance puedan:
 - Ejecutar screening contra una o más listas desde un modal emergente
 - Ver resultados en tabla con nivel de riesgo clasificado
 - Mantener historial de screenings con audit trail
+
+---
+
+## Colección de Postman
+
+Una colección de Postman lista para usar está incluida en [`postman/`](./postman/):
+
+| Archivo | Descripción |
+|---------|-------------|
+| `Risk-Screening-API.postman_collection.json` | Colección completa — todos los endpoints, ejemplos de respuesta y script de auto-token |
+| `Risk-Screening-API.postman_environment.json` | Entorno local (`http://localhost:5215`) |
+| `Risk-Screening-API.postman_environment.production.json` | Entorno de producción (URL de Azure Container Apps) |
+
+**Inicio rápido:**
+1. Importar la colección y el entorno local en Postman
+2. Ejecutar **Authentication → Sign In** — el token JWT se guarda automáticamente como variable de colección
+3. Todas las requests siguientes usan el token guardado via autenticación Bearer
 
 ---
 
@@ -93,6 +111,11 @@ risk-screening-api/
 |   `-- Shared/                               # Shared Kernel
 |
 |-- RiskScreening.UnitTests/                  # Tests unitarios
+|
+|-- postman/                                  # Colección y entornos de Postman
+|   |-- Risk-Screening-API.postman_collection.json
+|   |-- Risk-Screening-API.postman_environment.json
+|   `-- Risk-Screening-API.postman_environment.production.json
 |
 |-- compose.yaml                              # Docker Compose (API + SQL Server)
 |-- .env.example                              # Variables de entorno de ejemplo
