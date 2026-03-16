@@ -678,6 +678,57 @@ classDiagram
 
 ---
 
+## Deployment Diagram — Azure Container Apps
+
+> Shows the physical deployment topology on Azure: Container Apps for frontend and backend, Azure SQL Database for persistence, Docker Hub as the container registry.
+>
+> For step-by-step deployment instructions, see [Azure Deployment Guide](../deployment/azure-deployment.md).
+
+```mermaid
+C4Deployment
+    title Deployment Diagram - Risk Screening (Azure Container Apps)
+
+    Deployment_Node(github, "GitHub", "Source Control & CI/CD") {
+        Deployment_Node(actions, "GitHub Actions", "CI/CD Pipeline") {
+            Container(ci, "CI Workflow", "Build & Test", "Triggered on push/PR to main")
+            Container(cd, "CD Workflow", "Docker Push + Deploy", "Triggered by CI success on main")
+        }
+    }
+
+    Deployment_Node(dockerHub, "Docker Hub", "Container Registry") {
+        Container(apiImage, "riskscreening-api", "Docker Image", "jhosepmyr/riskscreening-api:latest")
+        Container(webImage, "riskscreening-web", "Docker Image", "jhosepmyr/riskscreening-web:latest")
+    }
+
+    Deployment_Node(azure, "Azure", "Cloud Platform") {
+        Deployment_Node(rg, "rg-riskscreening-prod", "Resource Group") {
+            Deployment_Node(env, "riskscreening-env", "Container Apps Environment") {
+                Container(api, "riskscreening-api", "Azure Container App", ".NET 10 Web API — 1 vCPU, 2 GB — external ingress :8080")
+                Container(web, "riskscreening-web", "Azure Container App", "Angular SPA on nginx — 0.5 vCPU, 1 GB — external ingress :8080")
+            }
+            Deployment_Node(sqlNode, "Azure SQL", "PaaS Database") {
+                ContainerDb(db, "RiskScreeningDb", "Azure SQL Database", "Basic tier — riskscreening-sqlserver.database.windows.net")
+            }
+        }
+    }
+
+    Rel(cd, apiImage, "Pushes image")
+    Rel(cd, webImage, "Pushes image")
+    Rel(api, apiImage, "Pulls from", "Docker Hub")
+    Rel(web, webImage, "Pulls from", "Docker Hub")
+    Rel(cd, api, "az containerapp update")
+    Rel(cd, web, "az containerapp update")
+    Rel(web, api, "HTTPS cross-origin", "CORS")
+    Rel(api, db, "SQL TCP :1433", "EF Core + DbUp")
+```
+
+> **Key points:**
+> - Both containers have `--ingress external` with separate `*.azurecontainerapps.io` HTTPS domains
+> - CORS is configured on the backend via `Cors__AllowedOrigins__0` env var
+> - CI/CD uses the `workflow_run` pattern: CD triggers only after CI passes on `main`
+
+---
+
 ## C4 Model Notes
 
 | Level | Audience | Tool |

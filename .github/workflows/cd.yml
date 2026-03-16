@@ -1,0 +1,88 @@
+name: CD
+
+on:
+  workflow_run:
+    workflows: [ "CI" ]
+    types: [ completed ]
+    branches: [ main ]
+
+env:
+  IMAGE_NAME: jhosepmyr/riskscreening-api
+
+jobs:
+
+  build-and-push:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
+
+    outputs:
+      version: ${{ steps.extract-version.outputs.version }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Extract version
+        id: extract-version
+        run: |
+          VERSION=$(grep -oPm1 '(?<=<Version>)[^<]+' RiskScreening.API/RiskScreening.API.csproj 2>/dev/null || echo "latest")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Building image version: $VERSION"
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build & Push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: RiskScreening.API/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:${{ steps.extract-version.outputs.version }}
+            ${{ env.IMAGE_NAME }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Summary
+        run: |
+          SHA="${{ github.event.workflow_run.head_sha }}"
+          echo "### Docker Image Published" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** \`${{ env.IMAGE_NAME }}:${{ steps.extract-version.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** \`${SHA::7}\`" >> $GITHUB_STEP_SUMMARY
+
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    environment: production
+
+    steps:
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Install containerapp extension
+        run: az extension add --name containerapp --upgrade --yes
+
+      - name: Deploy Container App
+        run: |
+          az containerapp update \
+            --name ${{ vars.BACKEND_CONTAINER_APP_NAME }} \
+            --resource-group ${{ vars.AZURE_RESOURCE_GROUP }} \
+            --image "${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.version }}"
+
+      - name: Summary
+        run: |
+          echo "### Production Deploy Completed" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** \`${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
