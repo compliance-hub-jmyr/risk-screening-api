@@ -34,7 +34,15 @@ public sealed class IcijScrapingSource(
             await using var browser = await playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
             {
                 Headless = true,
-                Args = ["--disable-blink-features=AutomationControlled", "--no-sandbox"]
+                Channel = "chromium",
+                Args =
+                [
+                    "--disable-blink-features=AutomationControlled",
+                    "--no-sandbox",
+                    "--disable-gpu",
+                    "--disable-dev-shm-usage",
+                    "--disable-setuid-sandbox"
+                ]
             });
 
             var context = await browser.NewContextAsync(new BrowserNewContextOptions
