@@ -7,7 +7,7 @@ Versionado: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ---
 
-## [Unreleased]
+## [1.0.0] — 2026-03-16
 
 ### Agregado
 
@@ -30,6 +30,8 @@ Versionado: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - `[INFRA]` `RateLimitResponseMiddleware` — reescribe respuestas 429 al formato estándar `ErrorResponse` (RFC 7807) con código de error `RATE_LIMIT_EXCEEDED`
 - `[INFRA]` Docker Compose con servicios API + SQL Server
 - `[INFRA]` Convención snake_case para mapeo de entidades en EF Core
+- `[INFRA]` Zona horaria configurable via `App:TimeZone` (`appsettings.json`) para timestamps de auditoría
+- `[INFRA]` Dockerfile con build multi-stage, dependencias Chromium/Playwright, usuario non-root
 
 #### Módulo IAM
 
@@ -105,6 +107,15 @@ Versionado: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - `[SUP]` `GET /api/suppliers?legalName=Acme` retornaba HTTP 500 — EF Core no podía traducir `EF.Property<string>(x, "LegalName")` para predicados de filtro y también fallaba en la navegación `.Value` dentro de árboles de expresión. Corregido usando el cast explícito `(string)x.LegalName` que EF Core reduce al nombre de columna y MockQueryable resuelve via `implicit operator string`.
 - `[SUP]` `GET /api/suppliers?status=approved` (minúsculas) no retornaba resultados — el filtro de enum comparaba `x.Status.ToString() == v` que EF Core no puede traducir. Corregido pre-parseando con `Enum.TryParse(ignoreCase: true)` y comparando `x.Status == valorParsed` directamente.
 
+#### Despliegue & CI/CD
+
+- `[DEPLOY]` Despliegue en Azure Container Apps con ingress externo y dominios HTTPS auto-provisionados
+- `[DEPLOY]` Azure SQL Database (PaaS, tier Basic) con regla de firewall `AllowAzureServices`
+- `[DEPLOY]` Guía de despliegue con comandos Azure CLI paso a paso (EN + ES)
+- `[CI/CD]` GitHub Actions CI workflow (`ci.yml`) — build y test en push/PR a `main`/`develop`
+- `[CI/CD]` GitHub Actions CD workflow (`cd.yml`) — Docker build, push a Docker Hub, deploy a Azure Container Apps via patrón `workflow_run`
+- `[CI/CD]` GitHub environment `production` con gate de aprobación manual
+
 #### Documentación
 
 - `[DOCS]` ADR-0001: Decisión de arquitectura Modular Monolith (EN + ES)
@@ -120,10 +131,15 @@ Versionado: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - `[DOCS]` ADR-0011: Campos de auditoría — IAuditableEntity + intercepción de SaveChangesAsync (EN + ES)
 - `[DOCS]` ADR-0012: Estrategia de versionado de API — header-based con header `Api-Version` (EN + ES)
 - `[DOCS]` ADR-0013: Logging estructurado con Serilog — templates optimizados para Loki (EN + ES)
-- `[DOCS]` Diagramas de Arquitectura C4 — L1 Context, L2 Container, L3 Component, L4 Code (EN + ES)
+- `[DOCS]` ADR-0014: Plataforma de contenedores — Azure Container Apps (EN + ES)
+- `[DOCS]` ADR-0015: Registro de contenedores — Docker Hub (EN + ES)
+- `[DOCS]` ADR-0016: Arquitectura de dos dominios — URLs públicas separadas (EN + ES)
+- `[DOCS]` ADR-0017: Pipeline CI/CD — GitHub Actions con patrón workflow_run (EN + ES)
+- `[DOCS]` ADR-0018: Estrategia de base de datos — Azure SQL Database PaaS (EN + ES)
+- `[DOCS]` Diagramas de Arquitectura C4 — L1 Context, L2 Container, L3 Component, L4 Code, Despliegue (EN + ES)
 - `[DOCS]` README — descripción del proyecto, stack tecnológico, tabla de ADRs (EN + ES)
 - `[DOCS]` CONTRIBUTING — estrategia de ramas, convenciones de commits, flujo de PRs (EN + ES)
 
 ---
 
-[Unreleased]: https://github.com/compliance-hub-jmyr/risk-screening-api/commits/main
+[1.0.0]: https://github.com/compliance-hub-jmyr/risk-screening-api/releases/tag/v1.0.0
