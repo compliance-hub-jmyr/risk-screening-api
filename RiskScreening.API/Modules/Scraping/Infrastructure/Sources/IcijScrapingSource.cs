@@ -36,7 +36,9 @@ public sealed class IcijScrapingSource(
     {
         try
         {
-            var url = $"{BaseUrl}/search?q={Uri.EscapeDataString(term)}&c=&j=&d=";
+            // ICIJ search input is limited to 50 characters — truncate to match browser behaviour
+            var searchTerm = term.Length > 50 ? term[..50] : term;
+            var url = $"{BaseUrl}/search?q={Uri.EscapeDataString(searchTerm)}&c=&j=&d=";
 
             using var playwright = await Playwright.CreateAsync();
             await using var browser = await playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
