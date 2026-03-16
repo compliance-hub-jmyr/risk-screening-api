@@ -5,16 +5,24 @@ using RiskScreening.API.Modules.Scraping.Domain.Model.ValueObjects;
 namespace RiskScreening.API.Modules.Scraping.Infrastructure.Sources;
 
 /// <summary>
-///     <see cref="IScrapingSource"/> adapter for the
+///     <see cref="IScrapingSource"/> implementation for integration with the
 ///     <a href="https://offshoreleaks.icij.org/">ICIJ Offshore Leaks Database</a>.
-///     <para>
-///         The ICIJ website is a JavaScript SPA protected by CloudFront.
-///         This adapter uses <b>Playwright</b> (headless Chromium) to render the page
-///         and extract the search results table with all four columns:
-///         Entity, Jurisdiction, Linked To, Data From.
-///     </para>
-///     <para>Returns <see cref="SearchResult.Empty"/> on any failure (fault-tolerant).</para>
 /// </summary>
+/// <remarks>
+///     <para>
+///         <strong>Technical Features:</strong>
+///         <list type="bullet">
+///             <item>Uses Playwright (headless Chromium) to render dynamic JavaScript content</item>
+///             <item>Implements bypass strategies to evade CloudFront automation detection mechanisms</item>
+///             <item>Extracts search results table with four columns: Entity, Jurisdiction, Linked To, Data From</item>
+///             <item>Provides fault-tolerance: returns <see cref="SearchResult.Empty"/> on any exception</item>
+///         </list>
+///     </para>
+///     <para>
+///         <strong>Error Handling Behavior:</strong> All exceptions are caught, logged, 
+///         and handled internally. The method always returns a valid result (never throws exceptions).
+///     </para>
+/// </remarks>
 public sealed class IcijScrapingSource(
     ILogger<IcijScrapingSource> logger) : IScrapingSource
 {
@@ -28,7 +36,9 @@ public sealed class IcijScrapingSource(
     {
         try
         {
-            var url = $"{BaseUrl}/search?q={Uri.EscapeDataString(term)}&c=&j=&d=";
+            // ICIJ search input is limited to 50 characters — truncate to match browser behaviour
+            var searchTerm = term.Length > 50 ? term[..50] : term;
+            var url = $"{BaseUrl}/search?q={Uri.EscapeDataString(searchTerm)}&c=&j=&d=";
 
             using var playwright = await Playwright.CreateAsync();
             await using var browser = await playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
@@ -56,7 +66,8 @@ public sealed class IcijScrapingSource(
 
             var page = await context.NewPageAsync();
 
-            // Remove automation flags to bypass CloudFront bot detection
+            // Injects an initialization script to mask automation indicators
+            // This is necessary to evade CloudFront bot detection mechanisms
             await page.AddInitScriptAsync(@"
                 Object.defineProperty(navigator, 'webdriver', { get: () => false });
                 Object.defineProperty(navigator, 'plugins',   { get: () => [1, 2, 3] });
@@ -70,11 +81,36 @@ public sealed class IcijScrapingSource(
                 Timeout = 30_000
             });
 
-            // Wait for the results table to appear in the DOM
-            await page.WaitForSelectorAsync("table.table tbody tr", new PageWaitForSelectorOptions
+            // Waits for the search results table to appear in the DOM
+            // Implements a fallback strategy to detect searches with no results
+            try
             {
-                Timeout = 10_000
-            });
+                // Attempts to wait for the table with result rows
+                await page.WaitForSelectorAsync("table.table tbody tr", new PageWaitForSelectorOptions
+                {
+                    Timeout = 20_000
+                });
+            }
+            catch (TimeoutException)
+            {
+                // If no rows are found, verifies whether the search completed but returned no results
+                // Validates the presence of the table to confirm the page loaded correctly
+                try
+                {
+                    await page.WaitForSelectorAsync("table.table", new PageWaitForSelectorOptions
+                    {
+                        Timeout = 5_000
+                    });
+                    
+                    logger.LogDebug("ICIJ: Search completed with no results for term: {Term}", term);
+                }
+                catch (TimeoutException innerEx)
+                {
+                    // If even the table header does not appear, indicates a page load failure
+                    logger.LogWarning("ICIJ: Failed to load search page for term: {Term}", term);
+                    throw new TimeoutException($"ICIJ search page failed to load for term: {term}", innerEx);
+                }
+            }
 
             var html = await page.ContentAsync();
             var entries = IcijHtmlParser.ParseResults(html, logger);

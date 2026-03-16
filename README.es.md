@@ -68,29 +68,27 @@ El sistema sigue una arquitectura de **Modular Monolith** en el backend, con sep
 ```
 risk-screening-api/
 |-- docs/
-|   |-- adr/                                  # Architecture Decision Records
-|   |   |-- 0001-modular-monolith.md
-|   |   |-- 0002-cqrs-mediatr.md
-|   |   |-- 0003-jwt-authentication.md
-|   |   |-- 0004-sql-migration-scripts.md
-|   |   |-- 0005-rate-limiting-strategy.md
-|   |   |-- 0006-web-scraping-approach.md
-|   |   |-- 0007-angular-frontend.md
-|   |   |-- 0008-cache-strategy.md
-|   |   |-- 0009-pagination-strategy.md
-|   |   |-- 0010-error-handling.md
-|   |   |-- 0011-auditing.md
-|   |   `-- 0012-api-versioning.md
-|   `-- architecture/
-|       |-- c4-diagrams.md                    # Diagramas C4 (L1 a L4)
-|       `-- database-schema.md                # ERD y definición de tablas
+|   |-- adr/                                  # Architecture Decision Records (0001–0018)
+|   |-- api/                                  # Especificaciones OpenAPI por módulo
+|   |   |-- openapi-iam.yaml
+|   |   |-- openapi-lists.yaml
+|   |   `-- openapi-suppliers.yaml
+|   |-- architecture/
+|   |   |-- c4-diagrams.md                    # Diagramas C4 (L1 a L4 + Deployment)
+|   |   `-- database-schema.md                # ERD y definición de tablas
+|   |-- deployment/
+|   |   `-- azure-deployment.md               # Guía paso a paso para Azure Container Apps
+|   `-- user-stories/
+|       |-- iam-module.md
+|       |-- scraping-module.md
+|       `-- suppliers-module.md
 |
 |-- RiskScreening.API/                        # Backend .NET 10
 |   |-- Migrations/
 |   |   `-- Scripts/                          # Scripts SQL versionados (estilo Flyway, ejecutados por DbUp)
 |   |-- Modules/
 |   |   |-- IAM/                              # Módulo IAM (Domain/App/Infra/Interfaces)
-|   |   |-- Scraping/                         # Módulo Scraping
+|   |   |-- Scraping/                         # Módulo Scraping (OFAC, World Bank, ICIJ via Playwright)
 |   |   `-- Suppliers/                        # Módulo Suppliers + Screening
 |   `-- Shared/                               # Shared Kernel
 |
@@ -137,8 +135,11 @@ risk-screening-api/
 
 | Componente | Tecnología |
 |-----------|-----------|
-| Base de datos | SQL Server 2022 |
-| Contenedores | Docker + Docker Compose |
+| Base de datos | SQL Server 2022 (local) / Azure SQL Database (producción) |
+| Contenedores | Docker + Docker Compose (local) / Azure Container Apps (producción) |
+| Registro de contenedores | Docker Hub (`jhosepmyr/riskscreening-api`) |
+| CI/CD | GitHub Actions (`ci.yml` build + test, `cd.yml` deploy) |
+| Automatización de browser | Microsoft Playwright (Chromium headless — scraping ICIJ) |
 
 ---
 
@@ -158,6 +159,12 @@ risk-screening-api/
 | [ADR-0010](./docs/adr/0010-error-handling.md) | Manejo centralizado de errores con GlobalExceptionHandler | Accepted |
 | [ADR-0011](./docs/adr/0011-auditing.md) | Timestamps de auditoría via intercepción de SaveChanges en EF Core | Accepted |
 | [ADR-0012](./docs/adr/0012-api-versioning.md) | Estrategia de versionado de API: header-based con `Api-Version` | Accepted |
+| [ADR-0013](./docs/adr/0013-structured-logging.md) | Logging estructurado con Serilog (templates optimizados para Loki) | Accepted |
+| [ADR-0014](./docs/adr/0014-container-platform.md) | Plataforma de contenedores: Azure Container Apps | Accepted |
+| [ADR-0015](./docs/adr/0015-container-registry.md) | Registro de contenedores: Docker Hub | Accepted |
+| [ADR-0016](./docs/adr/0016-two-domain-architecture.md) | Arquitectura de dos dominios: URLs públicas separadas por servicio | Accepted |
+| [ADR-0017](./docs/adr/0017-cicd-pipeline.md) | Pipeline CI/CD: GitHub Actions con patrón `workflow_run` | Accepted |
+| [ADR-0018](./docs/adr/0018-database-strategy.md) | Estrategia de base de datos: Azure SQL Database PaaS | Accepted |
 
 ---
 

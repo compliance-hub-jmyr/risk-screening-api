@@ -7,6 +7,21 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ---
 
+## [1.1.0] — 2026-03-16
+
+### Added
+
+- `[DB]` Migration script `V007__seed_sample_suppliers.sql` — seeds sample supplier records for development and demo environments, covering a range of risk levels, statuses, and countries to exercise all screening and filtering scenarios.
+- `[DOCS]` `CONTRIBUTING.md` — added Local Development Setup section documenting prerequisites, database startup, environment configuration, Playwright browser installation, and API run command.
+
+### Fixed
+
+- `[SCR]` `IcijScrapingSource` — truncate search term to 50 characters before building the ICIJ URL. ICIJ's search input has a 50-character browser limit; sending longer terms caused 0 results because the SPA truncated the query mid-word. Supplier names longer than 50 chars (e.g. "Oceania International Consultants (BVI) Company Limited") now correctly return matches.
+- `[SCR]` Playwright Chromium browser missing after package update — `IcijScrapingSource` threw `PlaywrightException: Executable doesn't exist` on startup. Root cause: the `Microsoft.Playwright` NuGet package pins a specific browser revision (`chromium-1208`) which must be downloaded manually in local development after each update. Production Docker image is unaffected (browser installed at build time).
+- `[DOCS]` `README.md` — updated ADR table (added ADR-0013 through ADR-0018), updated directory structure (added `docs/deployment/`, `docs/user-stories/`, `docs/api/`), and updated infrastructure table (added Azure Container Apps, Docker Hub, GitHub Actions, Playwright).
+
+---
+
 ## [1.0.0] — 2026-03-16
 
 ### Added
@@ -142,4 +157,5 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ---
 
+[1.1.0]: https://github.com/compliance-hub-jmyr/risk-screening-api/releases/tag/v1.1.0
 [1.0.0]: https://github.com/compliance-hub-jmyr/risk-screening-api/releases/tag/v1.0.0

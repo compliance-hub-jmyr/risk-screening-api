@@ -13,6 +13,50 @@ Cada repositorio tiene su propio `CHANGELOG.md`, `CONTRIBUTING.md` y ciclo de ve
 
 ---
 
+## Configuración para Desarrollo Local
+
+### Prerrequisitos
+
+- .NET 10 SDK
+- Docker Desktop (para SQL Server via Compose)
+- Node.js 22+ (solo necesario para ejecutar el script `playwright.ps1`)
+
+### 1. Iniciar la base de datos
+
+```bash
+docker compose up -d sqlserver
+```
+
+### 2. Configurar el entorno
+
+```bash
+cp .env.example .env
+# Editar .env con los valores locales (JWT key, admin password, etc.)
+```
+
+### 3. Instalar browsers de Playwright
+
+El módulo de scraping ICIJ usa **Microsoft Playwright** (Chromium headless). El binario del browser debe instalarse una vez al clonar el repositorio, y nuevamente cada vez que se actualice el paquete NuGet `Microsoft.Playwright`:
+
+```bash
+# Desde la raíz del repositorio (Git Bash)
+powershell RiskScreening.API/bin/Debug/net10.0/playwright.ps1 install chromium
+```
+
+> **Cuándo volver a ejecutarlo:** Si la API lanza `PlaywrightException: Executable doesn't exist at ...chromium-XXXX\chrome-win64\chrome.exe` al iniciar, el paquete fue actualizado a una nueva revisión del browser. Ejecutar el comando anterior para descargarlo.
+>
+> **Producción:** No es necesario — el `Dockerfile` instala Chromium durante el build de la imagen.
+
+### 4. Ejecutar la API
+
+```bash
+dotnet run --project RiskScreening.API
+```
+
+La API estará disponible en `http://localhost:5215`. Swagger UI en `http://localhost:5215/swagger`.
+
+---
+
 ## Gitflow
 
 Este proyecto sigue el modelo **Gitflow** estandar:

@@ -7,6 +7,21 @@ Versionado: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ---
 
+## [1.1.0] — 2026-03-16
+
+### Agregado
+
+- `[DB]` Script de migración `V007__seed_sample_suppliers.sql` — inserta proveedores de ejemplo para entornos de desarrollo y demo, cubriendo distintos niveles de riesgo, estados y países para ejercitar todos los escenarios de screening y filtrado.
+- `[DOCS]` `CONTRIBUTING.md` — agregada sección de Configuración para Desarrollo Local con prerrequisitos, arranque de base de datos, configuración de entorno, instalación del browser de Playwright y comando para correr la API.
+
+### Corregido
+
+- `[SCR]` `IcijScrapingSource` — el término de búsqueda se trunca a 50 caracteres antes de construir la URL de ICIJ. El buscador de ICIJ tiene un límite de 50 caracteres en el input del browser; enviar términos más largos devolvía 0 resultados porque el SPA truncaba la consulta a mitad de palabra. Nombres de proveedores con más de 50 chars (ej. "Oceania International Consultants (BVI) Company Limited") ahora retornan correctamente sus coincidencias.
+- `[SCR]` Browser Chromium de Playwright faltante tras actualización del paquete — `IcijScrapingSource` lanzaba `PlaywrightException: Executable doesn't exist` al iniciar. Causa raíz: el paquete NuGet `Microsoft.Playwright` fija una revisión específica del browser (`chromium-1208`) que debe descargarse manualmente en desarrollo local tras cada actualización. La imagen Docker de producción no se ve afectada (el browser se instala en tiempo de build).
+- `[DOCS]` `README.md` — tabla de ADRs actualizada (agregados ADR-0013 a ADR-0018), estructura de directorios actualizada (agregados `docs/deployment/`, `docs/user-stories/`, `docs/api/`), y tabla de infraestructura actualizada (agregados Azure Container Apps, Docker Hub, GitHub Actions, Playwright).
+
+---
+
 ## [1.0.0] — 2026-03-16
 
 ### Agregado
@@ -142,4 +157,5 @@ Versionado: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ---
 
+[1.1.0]: https://github.com/compliance-hub-jmyr/risk-screening-api/releases/tag/v1.1.0
 [1.0.0]: https://github.com/compliance-hub-jmyr/risk-screening-api/releases/tag/v1.0.0
