@@ -1,0 +1,628 @@
+# User Stories — Modulo Suppliers (Gestión de Proveedores)
+
+> **Formato:** Titulo / Descripcion / Entregable / Dependencias / Criterios de Aceptacion (BDD Given/When/Then).
+> **Tags de tareas:** `[BE-DOMAIN]` `[BE-APP]` `[BE-INFRA]` `[BE-INTERFACES]` `[BE-DB]` `[BE-TEST]` `[DOCS]`
+
+---
+
+## Historia Tecnica: Bootstrapping del Modulo Suppliers
+
+---
+
+### TS-SUP-000: Setup Inicial del Modulo Suppliers
+
+**Titulo:** Scripts de base de datos, configuracion EF Core y registro del modulo
+
+**Descripcion:**
+Como desarrollador, necesito configurar la infraestructura fundamental del modulo Suppliers — tablas de base de datos, configuraciones de entidad EF Core, implementaciones de repositorios y registro en el contenedor de dependencias — para que todas las historias de usuario de Suppliers tengan una base estable sobre la que construir.
+
+**Entregable:**
+Scripts de migracion SQL V005–V006, configuraciones EF Core para `Supplier` y `ScreeningResult`, `SupplierRepository`, `ScreeningResultRepository` y `SuppliersModuleExtensions` registrado en `Program.cs`.
+
+**Dependencias:**
+- `TS-IAM-000`: Setup inicial del modulo IAM (shared kernel, `AppDbContext`, `BaseRepository`)
+
+**Prioridad:** Critica | **Estimacion:** 3 SP | **Estado:** Implementado (v0.4.0)
+
+#### Tareas
+
+- `[BE-DB]` Script `V005__create_suppliers_table.sql` — columnas:
+  - `id` NVARCHAR(36) PK
+  - `legal_name` NVARCHAR(200) NOT NULL *(razon social)*
+  - `commercial_name` NVARCHAR(200) NOT NULL *(nombre comercial)*
+  - `tax_id` CHAR(11) NOT NULL UNIQUE *(identificador tributario — exactamente 11 digitos numericos)*
+  - `contact_phone` NVARCHAR(50) NULL
+  - `contact_email` NVARCHAR(255) NULL
+  - `website` NVARCHAR(500) NULL
+  - `address` NVARCHAR(500) NULL
+  - `country` NVARCHAR(100) NOT NULL
+  - `annual_billing_usd` DECIMAL(18, 2) NULL *(facturacion anual en USD)*
+  - `risk_level` NVARCHAR(10) NOT NULL DEFAULT 'NONE' CHECK (NONE/LOW/MEDIUM/HIGH)
+  - `status` NVARCHAR(20) NOT NULL DEFAULT 'PENDING' CHECK (PENDING/APPROVED/REJECTED/UNDER_REVIEW)
+  - `is_deleted` BIT NOT NULL DEFAULT 0 *(flag de eliminacion logica — independiente del estado de negocio)*
+  - `notes` NVARCHAR(MAX) NULL
+  - `created_at` DATETIME2, `updated_at` DATETIME2, `created_by` NVARCHAR(255), `updated_by` NVARCHAR(255)
+  - Indices: `IX_suppliers_risk_level`, `IX_suppliers_status`, `IX_suppliers_country`, `IX_suppliers_is_deleted`
+  - Restriccion CHECK en `tax_id`: `LIKE '[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]'`
+
+- `[BE-DB]` Script `V006__create_screening_results_table.sql` — columnas:
+  - `id` NVARCHAR(36) PK
+  - `supplier_id` NVARCHAR(36) NOT NULL FK → `suppliers(id)` ON DELETE CASCADE
+  - `sources_queried` NVARCHAR(200) NOT NULL *(CSV de fuentes consultadas, ej. "OFAC,WORLD_BANK,ICIJ")*
+  - `screened_at` DATETIME2 NOT NULL DEFAULT GETUTCDATE()
+  - `risk_level` NVARCHAR(10) NOT NULL DEFAULT 'NONE' CHECK (NONE/LOW/MEDIUM/HIGH)
+  - `total_matches` INT NOT NULL DEFAULT 0
+  - `entries_json` NVARCHAR(MAX) NULL *(serializacion JSON de los objetos RiskEntry coincidentes)*
+  - `created_at` DATETIME2 NOT NULL DEFAULT GETUTCDATE()
+  - Indices: `IX_screening_results_supplier_id`, `IX_screening_results_screened_at DESC`, `IX_screening_results_risk_level`
+  - **Sin `updated_at`** — los resultados de screening son inmutables tras la creacion
+
+- `[BE-INFRA]` EF Core `SupplierConfiguration` — mapea todos los campos incluyendo `LegalName`, `CommercialName`, `Website`, `AnnualBillingUsd`, `IsDeleted`
+- `[BE-INFRA]` EF Core `ScreeningResultConfiguration` — mapea `SourcesQueried`, `EntriesJson`; sin `updated_at`
+- `[BE-INFRA]` `SupplierRepository` y `ScreeningResultRepository` implementando `BaseRepository`
+- `[BE-INFRA]` `SuppliersModuleExtensions.AddSuppliersModule()` — registra ambos repositorios como scoped
+
+#### Criterios de Aceptacion
+
+- Given que la aplicacion arranca contra una base de datos nueva
+- When la secuencia de migracion DbUp se completa
+- Then la tabla `suppliers` existe con `legal_name`, `commercial_name`, `tax_id` CHAR(11), `website`, `annual_billing_usd`, `is_deleted` y las restricciones correspondientes
+- And la tabla `screening_results` existe con `sources_queried` y `entries_json`, sin `updated_at`, con FK a `suppliers` CASCADE DELETE
+- And arranques posteriores son idempotentes (DbUp no re-ejecuta scripts ya aplicados)
+
+---
+
+## Epica: Gestion de Proveedores
+
+---
+
+### US-SUP-001: Registrar un nuevo proveedor
+
+**Titulo:** Crear un registro de proveedor
+
+**Descripcion:**
+Como oficial de compliance o administrador, quiero registrar un nuevo proveedor en la plataforma, para poder hacer seguimiento de su perfil de riesgo y ejecutar verificaciones de screening contra listas internacionales de riesgo.
+
+**Entregable:**
+Endpoint `POST /api/suppliers` que valida la solicitud, verifica duplicados de `TaxId`, crea el agregado `Supplier` con `status = PENDING`, `riskLevel = NONE`, `isDeleted = false`, y retorna `201 Created` con el Id del nuevo proveedor.
+
+**Dependencias:**
+- `TS-SUP-000`: bootstrapping del modulo (tablas, EF Core, DI)
+- `US-IAM-001`: autenticacion JWT
+
+**Prioridad:** Alta | **Estimacion:** 3 SP | **Estado:** Actualizado (v0.4.1)
+
+#### Tareas
+
+- `[BE-DOMAIN]` Agregado `Supplier` con metodo fabrica `Create(legalName, commercialName, taxId, country, contactPhone?, contactEmail?, website?, address?, annualBillingUsd?, notes?)` — inicializa `Status = PENDING`, `RiskLevel = NONE`, `IsDeleted = false`
+- `[BE-DOMAIN]` Reglas de valor en `Create`:
+  - `LegalName` ≤ 200, requerido
+  - `CommercialName` ≤ 200, requerido
+  - `TaxId` exactamente 11 digitos numericos (`^\d{11}$`)
+  - `ContactEmail` formato valido si se provee
+  - `Website` formato URL valido si se provee
+  - `AnnualBillingUsd` ≥ 0 si se provee
+- `[BE-DOMAIN]` `SupplierTaxIdAlreadyExistsException` (extiende `BusinessRuleViolationException`)
+- `[BE-APP]` `CreateSupplierCommand` + `CreateSupplierCommandHandler` — verifica `ExistsByTaxIdAsync`, llama `Supplier.Create`, persiste, hace commit, retorna el nuevo Id
+- `[BE-APP]` `CreateSupplierCommandValidator` (FluentValidation) con todas las reglas de campo
+- `[BE-INTERFACES]` `SuppliersController.Create` — mapea `CreateSupplierRequest` → `CreateSupplierCommand`; retorna `201 Created` con header `Location`
+- `[BE-TEST]` Unit test: creacion exitosa, TaxId duplicado retorna 409, formato de TaxId invalido retorna 400, campos requeridos faltantes retornan 400
+
+#### Criterios de Aceptacion
+
+**Escenario 1: Creacion exitosa**
+- Given que soy un usuario autenticado
+- And envio `POST /api/suppliers` con `legalName`, `commercialName`, `taxId` (11 digitos) y `country` validos
+- When la peticion se procesa
+- Then recibo HTTP 201 Created
+- And el cuerpo de la respuesta contiene el Id del nuevo proveedor
+- And el header `Location` apunta a `GET /api/suppliers/{id}`
+- And el proveedor tiene `status = PENDING`, `riskLevel = NONE`, `isDeleted = false`
+
+**Escenario 2: TaxId duplicado**
+- Given que ya existe un proveedor con el mismo `taxId`
+- When envio `POST /api/suppliers` con ese `taxId`
+- Then recibo HTTP 409 Conflict con un mensaje descriptivo
+
+**Escenario 3: Formato de TaxId invalido**
+- Given que envio `taxId` con menos o mas de 11 digitos, o con caracteres no numericos
+- When la peticion llega al pipeline de validacion
+- Then recibo HTTP 400 Bad Request con un error a nivel de campo para `taxId`
+
+**Escenario 4: Campos requeridos faltantes**
+- Given que envio la solicitud sin `legalName`, `commercialName`, o con formato de `contactEmail` invalido
+- When la peticion llega al pipeline de validacion
+- Then recibo HTTP 400 Bad Request con listado de errores de validacion por campo
+
+**Escenario 5: Sin autenticacion**
+- Given que no incluyo token JWT Bearer
+- When envio `POST /api/suppliers`
+- Then recibo HTTP 401 Unauthorized
+
+---
+
+### US-SUP-002: Listar todos los proveedores (paginado)
+
+**Titulo:** Listado paginado de proveedores
+
+**Descripcion:**
+Como oficial de compliance o administrador, quiero ver el listado paginado de todos los proveedores registrados, para monitorear sus estados y niveles de riesgo desde el panel principal.
+
+**Entregable:**
+Endpoint `GET /api/suppliers` que retorna una lista paginada y ordenada de proveedores no eliminados, con soporte para los parametros `page`, `size`, `sortBy` y `sortDirection`.
+
+**Dependencias:**
+- `US-SUP-001`
+
+**Prioridad:** Alta | **Estimacion:** 2 SP | **Estado:** Implementado (v0.4.0)
+
+#### Tareas
+
+- `[BE-APP]` `GetAllSuppliersQuery` (page, size, sortBy, sortDirection) + `GetAllSuppliersQueryHandler` — filtra `IsDeleted = false`, ordena por `UpdatedAt` desc por defecto
+- `[BE-INFRA]` `ISupplierRepository.Query()` retornando `IQueryable<Supplier>` para composicion LINQ
+- `[BE-INTERFACES]` `SuppliersController.GetAll` — mapea parametros de query a `GetAllSuppliersQuery`; retorna `PageResponse<SupplierResponse>`
+- `[BE-TEST]` Unit test: listado paginado, ordenamiento, resultado vacio
+
+#### Criterios de Aceptacion
+
+**Escenario 1: Listado exitoso**
+- Given que estoy autenticado y existen proveedores
+- When llamo `GET /api/suppliers?page=0&size=10`
+- Then recibo HTTP 200 con `{ content: [...], page: { number, size, totalElements, totalPages } }`
+- And cada entrada incluye `{ id, legalName, commercialName, taxId, country, contactEmail, contactPhone, website, annualBillingUsd, riskLevel, status, updatedAt, createdAt }`
+- And los proveedores eliminados logicamente (`isDeleted = true`) NO estan incluidos
+- And los resultados estan ordenados por `updatedAt` descendente por defecto
+
+**Escenario 2: Proveedores rechazados siguen visibles**
+- Given que un proveedor tiene `status = REJECTED` pero `isDeleted = false`
+- When llamo `GET /api/suppliers`
+- Then el proveedor rechazado SI aparece en el listado (rechazo de compliance != eliminacion)
+
+**Escenario 3: Ordenamiento**
+- Given que llamo `GET /api/suppliers?sortBy=legalName&sortDirection=asc`
+- When la peticion se procesa
+- Then recibo los proveedores ordenados por `legalName` ascendente
+
+**Escenario 4: Resultado vacio**
+- Given que no hay proveedores registrados (o todos estan eliminados logicamente)
+- When llamo `GET /api/suppliers`
+- Then recibo HTTP 200 con `{ content: [], page: { totalElements: 0 } }`
+
+---
+
+### US-SUP-003: Obtener proveedor por ID
+
+**Titulo:** Consultar el perfil completo de un proveedor
+
+**Descripcion:**
+Como oficial de compliance o administrador, quiero ver el perfil completo de un proveedor especifico, para revisar sus detalles, nivel de riesgo actual y estado antes de tomar una decision.
+
+**Entregable:**
+Endpoint `GET /api/suppliers/{supplierId}` que retorna el perfil completo del proveedor.
+
+**Dependencias:**
+- `US-SUP-002`
+
+**Prioridad:** Alta | **Estimacion:** 1 SP | **Estado:** Actualizado (v0.4.1)
+
+#### Tareas
+
+- `[BE-APP]` `GetSupplierByIdQuery` + `GetSupplierByIdQueryHandler` — lanza `SupplierNotFoundException` si no se encuentra o `IsDeleted = true`
+- `[BE-INTERFACES]` `SuppliersController.GetById` — mapea 404 via `GlobalExceptionHandler`
+- `[BE-TEST]` Unit test: proveedor encontrado, proveedor no encontrado retorna 404, proveedor eliminado logicamente retorna 404
+
+#### Criterios de Aceptacion
+
+**Escenario 1: Proveedor encontrado**
+- Given que estoy autenticado y el supplierId existe y `isDeleted = false`
+- When llamo `GET /api/suppliers/{supplierId}`
+- Then recibo HTTP 200 con el perfil completo del proveedor incluyendo `legalName`, `commercialName`, `taxId`, `website`, `annualBillingUsd` y todos los demas campos
+
+**Escenario 2: Proveedor no encontrado o eliminado**
+- Given que el supplierId no existe o `isDeleted = true`
+- When llamo `GET /api/suppliers/{supplierId}`
+- Then recibo HTTP 404 Not Found con un mensaje de error descriptivo
+
+---
+
+### US-SUP-004: Actualizar informacion del proveedor
+
+**Titulo:** Editar los datos de un proveedor
+
+**Descripcion:**
+Como oficial de compliance o administrador, quiero actualizar la informacion de un proveedor, para que el registro se mantenga preciso cuando cambien los datos de contacto o comerciales.
+
+**Entregable:**
+Endpoint `PUT /api/suppliers/{supplierId}` que actualiza todos los campos mutables. `TaxId` esta intencionalmente excluido — no puede modificarse despues de la creacion.
+
+**Dependencias:**
+- `US-SUP-003`
+
+**Prioridad:** Alta | **Estimacion:** 2 SP | **Estado:** Actualizado (v0.4.1)
+
+#### Tareas
+
+- `[BE-DOMAIN]` Metodo `Supplier.Update(legalName, commercialName, country, contactPhone?, contactEmail?, website?, address?, annualBillingUsd?, notes?)` — aplica nuevos valores; guard `EnsureNotDeleted()` verifica `IsDeleted = false`
+- `[BE-APP]` `UpdateSupplierCommand` + `UpdateSupplierCommandHandler` — carga proveedor, llama `Update`, hace commit
+- `[BE-APP]` `UpdateSupplierCommandValidator` (FluentValidation — mismas reglas que Create, mas Id requerido)
+- `[BE-INTERFACES]` `SuppliersController.Update` — retorna 204 No Content
+- `[BE-TEST]` Unit test: actualizacion exitosa, proveedor no encontrado retorna 404, proveedor eliminado logicamente retorna 422
+
+#### Criterios de Aceptacion
+
+**Escenario 1: Actualizacion exitosa**
+- Given que estoy autenticado y el proveedor existe y `isDeleted = false`
+- When llamo `PUT /api/suppliers/{supplierId}` con los campos actualizados validos incluyendo `commercialName`, `website`, `annualBillingUsd`
+- Then recibo HTTP 204 No Content
+- And un `GET /api/suppliers/{supplierId}` posterior refleja los nuevos valores
+
+**Escenario 2: Proveedor no encontrado**
+- Given que el supplierId no existe
+- When llamo `PUT /api/suppliers/{supplierId}`
+- Then recibo HTTP 404 Not Found
+
+**Escenario 3: Proveedor eliminado logicamente**
+- Given que el proveedor tiene `isDeleted = true`
+- When llamo `PUT /api/suppliers/{supplierId}`
+- Then recibo HTTP 422 Unprocessable Entity con mensaje de violacion de regla de negocio
+
+**Escenario 4: Errores de validacion**
+- Given que envio la solicitud con formato de `contactEmail` invalido o `annualBillingUsd` negativo
+- When la peticion llega al pipeline de validacion
+- Then recibo HTTP 400 Bad Request
+
+---
+
+### US-SUP-005: Eliminar proveedor (soft delete)
+
+**Titulo:** Eliminacion logica de un proveedor
+
+**Descripcion:**
+Como administrador, quiero eliminar logicamente un registro de proveedor, para que proveedores dados de baja o fraudulentos ya no aparezcan en los listados activos sin perder el historial de auditoria.
+
+**Entregable:**
+Endpoint `DELETE /api/suppliers/{supplierId}` que establece `IsDeleted = true`. **No modifica `Status`** — el estado de negocio (PENDING/APPROVED/REJECTED/UNDER_REVIEW) se preserva para auditoria. El registro permanece en la base de datos y se excluye de todos los listados.
+
+**Dependencias:**
+- `US-SUP-003`
+
+**Prioridad:** Alta | **Estimacion:** 1 SP | **Estado:** Actualizado (v0.4.1)
+
+#### Tareas
+
+- `[BE-DOMAIN]` Metodo `Supplier.Delete()` — establece `IsDeleted = true`; guard `EnsureNotDeleted()` lanza `SupplierAlreadyDeletedException` si `IsDeleted` ya es `true`
+- `[BE-APP]` `DeleteSupplierCommand` + `DeleteSupplierCommandHandler`
+- `[BE-INTERFACES]` `SuppliersController.Delete` — retorna 204 No Content
+- `[BE-TEST]` Unit test: eliminacion exitosa, ya eliminado retorna 404, proveedor no encontrado retorna 404
+
+> **Nota de diseno:** La eliminacion logica (`IsDeleted = true`) es independiente del rechazo de compliance (`Status = REJECTED`). Un proveedor rechazado sigue visible en listados hasta ser eliminado explicitamente. Ambas operaciones pueden coexistir.
+
+#### Criterios de Aceptacion
+
+**Escenario 1: Eliminacion exitosa**
+- Given que soy ADMIN autenticado y el proveedor existe y `isDeleted = false`
+- When llamo `DELETE /api/suppliers/{supplierId}`
+- Then recibo HTTP 204 No Content
+- And el proveedor ya no aparece en `GET /api/suppliers`
+- And `isDeleted = true` en la base de datos; el registro NO se elimina fisicamente
+- And el `status` del proveedor esta **sin cambios** (preservado para auditoria)
+
+**Escenario 2: Ya eliminado**
+- Given que el proveedor ya tiene `isDeleted = true`
+- When llamo `DELETE /api/suppliers/{supplierId}`
+- Then recibo HTTP 404 Not Found
+
+**Escenario 3: Proveedor no encontrado**
+- Given que el supplierId no existe
+- When llamo `DELETE /api/suppliers/{supplierId}`
+- Then recibo HTTP 404 Not Found
+
+---
+
+## Epica: Screening de Proveedores
+
+---
+
+### US-SUP-006: Ejecutar screening para un proveedor
+
+**Titulo:** Disparar una verificacion de riesgo en tiempo real
+
+**Descripcion:**
+Como oficial de compliance, quiero disparar un screening de riesgo para un proveedor contra listas internacionales de sanciones y exclusiones, para evaluar su nivel de riesgo antes de aprobarlo como vendedor.
+
+**Entregable:**
+Endpoint `POST /api/suppliers/{supplierId}/screenings` que acepta un listado opcional de fuentes a consultar (OFAC, WORLD_BANK, ICIJ; todas por defecto), ejecuta las consultas en paralelo, computa un `RiskLevel` con logica por fuente, crea un `ScreeningResult` almacenando las entradas coincidentes serializadas en JSON, actualiza el `RiskLevel` del proveedor, y auto-transiciona el proveedor a `UNDER_REVIEW` si el resultado es `HIGH`. Retorna `201 Created` con el Id del nuevo resultado de screening.
+
+**Dependencias:**
+- `US-SUP-003`
+- Modulo Scraping (`ScrapingOrchestrationService`) operacional
+
+**Prioridad:** Critica | **Estimacion:** 5 SP | **Estado:** Actualizado (v0.5.1)
+
+#### Tareas
+
+- `[BE-DOMAIN]` Metodo `Supplier.ApplyScreeningResult(RiskLevel)` — actualiza `RiskLevel`, establece `Status = UNDER_REVIEW` si `riskLevel = HIGH`
+- `[BE-DOMAIN]` Agregado `ScreeningResult` con fabrica `ScreeningResult.Create(supplierId, sourcesQueried, riskLevel, totalMatches, entries)` — inmutable tras creacion; `entries` se serializa como JSON en `EntriesJson`
+- `[BE-DOMAIN]` `ScreeningResultNotFoundException` (extiende `EntityNotFoundException`)
+- `[BE-APP]` `RunScreeningCommand` — campos: `SupplierId`, `Sources` (opcional `IReadOnlyList<string>?`; valores validos: `"ofac"`, `"worldbank"`, `"icij"`; si null → todas)
+- `[BE-APP]` `RunScreeningCommandHandler`:
+  1. Carga proveedor; lanza `SupplierNotFoundException` si no existe o `IsDeleted = true`
+  2. Determina fuentes a consultar (param `Sources` o todas por defecto)
+  3. Llama `ScrapingOrchestrationService` para las fuentes seleccionadas en paralelo usando `LegalName` como termino
+  4. Computa `RiskLevel` con **logica por fuente**:
+     - **OFAC**: score ≥ 0.85 → HIGH | score ≥ 0.60 → MEDIUM | cualquier coincidencia → LOW
+     - **World Bank**: cualquier coincidencia → HIGH *(empresa formalmente inhabilitada)*
+     - **ICIJ**: cualquier coincidencia → LOW *(leak periodistico, no sancion oficial)*
+     - `RiskLevel` final = maximo entre todas las fuentes
+  5. Crea `ScreeningResult.Create(supplierId, sourcesQueried, riskLevel, totalMatches, allEntries)`
+  6. Llama `supplier.ApplyScreeningResult(riskLevel)`
+  7. Persiste ambos, hace commit, retorna el nuevo Id
+- `[BE-INFRA]` `IScreeningResultRepository` + `ScreeningResultRepository`
+- `[BE-INTERFACES]` `SuppliersController.RunScreening` — acepta body opcional `{ "sources": ["ofac", "worldbank"] }`; retorna `201 Created` con header `Location`
+- `[BE-TEST]` Unit test: screening crea resultado y actualiza proveedor; World Bank → HIGH; HIGH → UNDER_REVIEW; entries guardadas; proveedor no encontrado retorna 404
+
+#### Criterios de Aceptacion
+
+**Escenario 1: Screening exitoso — sin coincidencias**
+- Given que estoy autenticado y el proveedor existe
+- And no se encuentran coincidencias en ninguna de las fuentes consultadas
+- When llamo `POST /api/suppliers/{supplierId}/screenings`
+- Then recibo HTTP 201 Created
+- And el `ScreeningResult` tiene `riskLevel = NONE`, `totalMatches = 0`, `entriesJson = "[]"`
+- And el `riskLevel` del proveedor se actualiza a `NONE`
+
+**Escenario 2: Seleccion de fuentes**
+- Given que envio `{ "sources": ["ofac", "icij"] }` en el cuerpo de la peticion
+- When el screening se ejecuta
+- Then solo se consultan OFAC e ICIJ
+- And `sourcesQueried = "OFAC,ICIJ"` en el `ScreeningResult`
+
+**Escenario 3: Por defecto — todas las fuentes**
+- Given que envio la peticion sin cuerpo (o `sources: null`)
+- When el screening se ejecuta
+- Then se consultan OFAC, World Bank e ICIJ
+
+**Escenario 4: World Bank → riesgo HIGH**
+- Given que el nombre del proveedor aparece en la lista de empresas inhabilitadas del World Bank
+- When el screening se completa
+- Then `ScreeningResult.riskLevel = HIGH`
+- And el `status` del proveedor cambia automaticamente a `UNDER_REVIEW`
+
+**Escenario 5: Umbrales de scoring OFAC**
+- Given que OFAC retorna entradas con el siguiente score maximo:
+  - Score ≥ 0.85 → `riskLevel = HIGH`
+  - Score ≥ 0.60 → `riskLevel = MEDIUM`
+  - Score < 0.60 → `riskLevel = LOW`
+- When el screening se completa
+- Then el `ScreeningResult.riskLevel` refleja la clasificacion correcta
+
+**Escenario 6: Entradas guardadas en el resultado**
+- Given que alguna fuente retorna coincidencias
+- When el screening se completa
+- Then `ScreeningResult.entriesJson` contiene la lista serializada de todos los objetos `RiskEntry` coincidentes
+- And un `GET /api/screenings/{screeningId}` posterior retorna esas entradas deserializadas
+
+**Escenario 7: Proveedor no encontrado**
+- Given que el supplierId no existe o `isDeleted = true`
+- When llamo `POST /api/suppliers/{supplierId}/screenings`
+- Then recibo HTTP 404 Not Found
+
+**Escenario 8: Fuente externa no disponible**
+- Given que una de las fuentes seleccionadas no es accesible
+- When el screening se ejecuta
+- Then el orquestador retorna `SearchResult.Empty` para la fuente que fallo
+- And el screening se completa usando los resultados de las fuentes disponibles restantes
+
+---
+
+### US-SUP-007: Listar resultados de screening de un proveedor
+
+**Titulo:** Listado paginado del historial de screenings
+
+**Descripcion:**
+Como oficial de compliance o administrador, quiero ver el historial completo de screenings de un proveedor, ordenado del mas reciente al mas antiguo, para hacer seguimiento de como ha evolucionado su perfil de riesgo.
+
+**Entregable:**
+Endpoint `GET /api/screenings?supplierId={supplierId}` que retorna una lista paginada de todos los resultados de screening. Las **entradas coincidentes** (`entries`) se omiten del listado para respuestas ligeras — se obtienen via `GET /api/screenings/{id}`.
+
+**Dependencias:**
+- `US-SUP-006`
+
+**Prioridad:** Alta | **Estimacion:** 2 SP | **Estado:** Actualizado (v0.5.1)
+
+#### Tareas
+
+- `[BE-APP]` `GetScreeningResultsBySupplierQuery` (supplierId, page, size) + handler — consulta via `QueryBySupplierId`, ordena por `ScreenedAt` descendente
+- `[BE-INTERFACES]` `ScreeningsController.GetBySupplierId` — requiere parametro `supplierId`; retorna `PageResponse<ScreeningResultSummaryResponse>` *(sin campo `entries`)*
+- `[BE-TEST]` Unit test: resultados paginados para proveedor valido, lista vacia cuando no se han ejecutado screenings
+
+#### Criterios de Aceptacion
+
+**Escenario 1: Listado exitoso**
+- Given que estoy autenticado y se ha ejecutado al menos un screening para el proveedor
+- When llamo `GET /api/screenings?supplierId={supplierId}&page=0&size=10`
+- Then recibo HTTP 200 con una lista paginada ordenada por `screenedAt` descendente
+- And cada entrada de resumen incluye `{ id, supplierId, sourcesQueried, screenedAt, riskLevel, totalMatches, createdAt }` **sin** `entries`
+
+**Escenario 2: Sin screenings aun**
+- Given que el proveedor existe pero no tiene historial de screenings
+- When llamo `GET /api/screenings?supplierId={supplierId}`
+- Then recibo HTTP 200 con `{ content: [], page: { totalElements: 0 } }`
+
+---
+
+### US-SUP-008: Obtener resultado de screening por ID
+
+**Titulo:** Consultar un resultado de screening especifico
+
+**Descripcion:**
+Como oficial de compliance, quiero recuperar los detalles de un resultado de screening especifico, para revisar el nivel de riesgo exacto y el conteo de coincidencias de una ejecucion en particular.
+
+**Entregable:**
+Endpoint `GET /api/screenings/{screeningId}` que retorna el resultado de screening completo con la lista de entradas coincidentes deserializadas desde `entriesJson`.
+
+**Dependencias:**
+- `US-SUP-007`
+
+**Prioridad:** Media | **Estimacion:** 1 SP | **Estado:** Actualizado (v0.5.1)
+
+#### Tareas
+
+- `[BE-APP]` `GetScreeningResultByIdQuery` + handler — lanza `ScreeningResultNotFoundException` si no se encuentra; deserializa `EntriesJson` → `List<RiskEntry>`
+- `[BE-INTERFACES]` `ScreeningsController.GetById` — retorna `ScreeningResultDetailResponse` que incluye el campo `entries`
+- `[BE-TEST]` Unit test: resultado encontrado con entries deserializadas, resultado no encontrado retorna 404
+
+#### Criterios de Aceptacion
+
+**Escenario 1: Resultado encontrado con entradas**
+- Given que estoy autenticado y el screeningId existe
+- When llamo `GET /api/screenings/{screeningId}`
+- Then recibo HTTP 200 con `{ id, supplierId, sourcesQueried, screenedAt, riskLevel, totalMatches, createdAt, entries: [...] }`
+- And `entries` es la lista deserializada de objetos `RiskEntry` con sus campos especificos por fuente
+
+**Escenario 2: Resultado no encontrado**
+- Given que el screeningId no existe
+- When llamo `GET /api/screenings/{screeningId}`
+- Then recibo HTTP 404 Not Found con un mensaje de error descriptivo
+
+---
+
+## Epica: Flujo de Trabajo de Proveedores
+
+---
+
+### US-SUP-009: Aprobar un proveedor
+
+**Titulo:** Marcar un proveedor como aprobado
+
+**Descripcion:**
+Como administrador, quiero aprobar un proveedor que ha sido revisado, para que pueda ser marcado como vendedor de confianza y excluido de las revisiones pendientes.
+
+**Entregable:**
+Endpoint `PATCH /api/suppliers/{supplierId}/approve` que transiciona el `Status` del proveedor a `APPROVED`.
+
+**Dependencias:**
+- `US-SUP-006`
+
+**Prioridad:** Alta | **Estimacion:** 1 SP | **Estado:** Pendiente
+
+#### Tareas
+
+- `[BE-DOMAIN]` Metodo `Supplier.Approve()` — establece `Status = APPROVED`; guard `EnsureNotDeleted()`
+- `[BE-APP]` `ApproveSupplierCommand` + `ApproveSupplierCommandHandler`
+- `[BE-INTERFACES]` `SuppliersController.Approve` — retorna 204 No Content
+- `[BE-TEST]` Unit test: aprobacion exitosa, proveedor eliminado retorna 404
+
+#### Criterios de Aceptacion
+
+**Escenario 1: Aprobacion exitosa**
+- Given que soy ADMIN autenticado y el proveedor tiene status `PENDING` o `UNDER_REVIEW`
+- When llamo `PATCH /api/suppliers/{supplierId}/approve`
+- Then recibo HTTP 204 No Content
+- And el `status` del proveedor es `APPROVED`
+
+**Escenario 2: Proveedor no encontrado**
+- Given que el supplierId no existe
+- When llamo `PATCH /api/suppliers/{supplierId}/approve`
+- Then recibo HTTP 404 Not Found
+
+---
+
+### US-SUP-010: Rechazar un proveedor
+
+**Titulo:** Marcar un proveedor como rechazado
+
+**Descripcion:**
+Como administrador, quiero rechazar un proveedor que no paso la revision de compliance. **Este rechazo es una decision de negocio** y es independiente de la eliminacion logica del registro. Un proveedor rechazado sigue visible en listados para auditoria.
+
+**Entregable:**
+Endpoint `PATCH /api/suppliers/{supplierId}/reject` que transiciona el `Status` del proveedor a `REJECTED`.
+
+**Dependencias:**
+- `US-SUP-009`
+
+**Prioridad:** Alta | **Estimacion:** 1 SP | **Estado:** Pendiente
+
+#### Tareas
+
+- `[BE-DOMAIN]` Metodo `Supplier.Reject()` — establece `Status = REJECTED`; guard `EnsureNotDeleted()` verifica `IsDeleted = false`; lanza `InvalidSupplierStateException` si ya esta en `REJECTED`
+- `[BE-APP]` `RejectSupplierCommand` + `RejectSupplierCommandHandler`
+- `[BE-INTERFACES]` `SuppliersController.Reject` — retorna 204 No Content
+- `[BE-TEST]` Unit test: rechazo exitoso, ya rechazado retorna 422, proveedor eliminado retorna 404
+
+#### Criterios de Aceptacion
+
+**Escenario 1: Rechazo exitoso**
+- Given que soy ADMIN autenticado y el proveedor existe, `isDeleted = false` y `status != REJECTED`
+- When llamo `PATCH /api/suppliers/{supplierId}/reject`
+- Then recibo HTTP 204 No Content
+- And el `status` del proveedor es `REJECTED`
+- And el proveedor **sigue apareciendo** en `GET /api/suppliers` (visible para auditoria)
+
+**Escenario 2: Proveedor ya rechazado**
+- Given que el proveedor ya tiene `status = REJECTED`
+- When llamo `PATCH /api/suppliers/{supplierId}/reject`
+- Then recibo HTTP 422 Unprocessable Entity
+
+**Escenario 3: Proveedor eliminado**
+- Given que `isDeleted = true`
+- When llamo `PATCH /api/suppliers/{supplierId}/reject`
+- Then recibo HTTP 404 Not Found
+
+---
+
+### US-SUP-011: Marcar un proveedor en revision
+
+**Titulo:** Marcar manualmente un proveedor para revision
+
+**Descripcion:**
+Como oficial de compliance, quiero poner manualmente un proveedor en revision, para poder marcarlo para investigacion adicional antes de aprobarlo o rechazarlo — independientemente de los disparadores automaticos de screening.
+
+**Entregable:**
+Endpoint `PATCH /api/suppliers/{supplierId}/under-review` que transiciona el `Status` del proveedor a `UNDER_REVIEW`.
+
+**Dependencias:**
+- `US-SUP-009`
+
+**Prioridad:** Media | **Estimacion:** 1 SP | **Estado:** Pendiente
+
+#### Tareas
+
+- `[BE-DOMAIN]` Metodo `Supplier.MarkUnderReview()` — establece `Status = UNDER_REVIEW`; guard `EnsureNotDeleted()`
+- `[BE-APP]` `MarkUnderReviewCommand` + `MarkUnderReviewCommandHandler`
+- `[BE-INTERFACES]` `SuppliersController.MarkUnderReview` — retorna 204 No Content
+- `[BE-TEST]` Unit test: transicion exitosa, proveedor eliminado retorna 404
+
+#### Criterios de Aceptacion
+
+**Escenario 1: Transicion exitosa**
+- Given que estoy autenticado y el proveedor existe y no esta eliminado
+- When llamo `PATCH /api/suppliers/{supplierId}/under-review`
+- Then recibo HTTP 204 No Content
+- And el `status` del proveedor es `UNDER_REVIEW`
+
+**Escenario 2: Proveedor no encontrado**
+- Given que el supplierId no existe
+- When llamo `PATCH /api/suppliers/{supplierId}/under-review`
+- Then recibo HTTP 404 Not Found
+
+---
+
+## Notas de Implementacion
+
+| Aspecto | Implementacion |
+|---------|---------------|
+| Soft delete | `Supplier.Delete()` establece `IsDeleted = true`; **no modifica `Status`**; filtrado de todos los listados con `WHERE is_deleted = 0`; `GetById` tambien retorna 404 para eliminados |
+| Rechazo de negocio | `Supplier.Reject()` establece `Status = REJECTED`; el registro **permanece visible** en listados (`isDeleted = false`); es una decision de compliance, no una eliminacion |
+| TaxId | Exactamente 11 digitos numericos; validado con FluentValidation (`^\d{11}$`) y restriccion CHECK en BD (`CHAR(11)`); inmutable tras la creacion |
+| Campos requeridos del proveedor | `legalName` (razon social), `commercialName` (nombre comercial), `taxId`, `country` — requeridos; `website`, `annualBillingUsd` DECIMAL(18,2), `contactPhone`, `contactEmail`, `address` — opcionales |
+| Scoring de riesgo por fuente | OFAC: score ≥ 0.85 → HIGH, ≥ 0.60 → MEDIUM, cualquier coincidencia → LOW; World Bank: cualquier coincidencia → HIGH (empresa formalmente inhabilitada); ICIJ: cualquier coincidencia → LOW (leak periodistico, no sancion oficial) |
+| Nivel de riesgo final | `RiskLevel` = maximo entre todas las fuentes consultadas |
+| Auto-revision | `Supplier.ApplyScreeningResult(HIGH)` establece automaticamente `Status = UNDER_REVIEW` |
+| Entradas en ScreeningResult | Serializadas como JSON en `entries_json` (NVARCHAR MAX); `GET /api/screenings/{id}` las deserializa y retorna; el listado (`GET /api/screenings?supplierId=`) las omite para respuestas ligeras |
+| Inmutabilidad de ScreeningResult | Sin `updated_at` en BD ni en configuracion EF Core; un resultado existente nunca se actualiza |
+| Seleccion de fuentes | `RunScreeningCommand.Sources` (opcional); si null = todas las fuentes; validado contra ["ofac", "worldbank", "icij"] |
+| Tolerancia a fallos en scraping | Cada `IScrapingSource` retorna `SearchResult.Empty` ante cualquier excepcion HTTP o de parsing; el screening siempre completa |
+| Cascade delete | FK `screening_results.supplier_id` tiene `ON DELETE CASCADE` — eliminar fisicamente un proveedor en BD tambien elimina su historial de screenings |
+| Caching | `ScrapingOrchestrationService` cachea resultados por `(fuente, termino)` por 10 minutos |
+| Estado de implementacion | TS-SUP-000 a US-SUP-008 actualizados (v0.4.1–v0.5.1); US-SUP-009–011 (transiciones de flujo) pendientes |

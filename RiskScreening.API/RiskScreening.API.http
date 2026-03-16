@@ -1,6 +1,151 @@
-@RiskScreening.API_HostAddress = http://localhost:5215
+### Sign In
+POST http://localhost:5215/api/authentication/sign-in
+Api-Version: 1
+Content-Type: application/json
 
-GET {{RiskScreening.API_HostAddress}}/weatherforecast/
-Accept: application/json
+{
+  "email": "admin@riskscreening.com",
+  "password": "Admin123!"
+}
+
+###
+
+### Get Current User
+GET http://localhost:5215/api/authentication/me
+Api-Version: 1
+Authorization: Bearer {{token}}
+
+###
+
+### Create Supplier
+POST http://localhost:5215/api/suppliers
+Api-Version: 1
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "legalName": "Acme Soluciones S.A.C.",
+  "commercialName": "Acme",
+  "taxId": "20512345678",
+  "country": "PE",
+  "contactPhone": "+51 999 888 777",
+  "contactEmail": "contacto@acme.pe",
+  "website": "https://acme.pe",
+  "address": "Av. Javier Prado 1234, Lima",
+  "annualBillingUsd": 150000.50,
+  "notes": "Proveedor referido por el area de compras"
+}
+
+###
+
+### Get All Suppliers (default pagination)
+GET http://localhost:5215/api/suppliers
+Api-Version: 1
+Authorization: Bearer {{token}}
+
+###
+
+### Get All Suppliers (with filters and pagination)
+GET http://localhost:5215/api/suppliers?country=PE&status=Pending&page=0&size=10&sortBy=legalName&sortDirection=ASC
+Api-Version: 1
+Authorization: Bearer {{token}}
+
+###
+
+### Get All Suppliers (search by legal name)
+GET http://localhost:5215/api/suppliers?legalName=Acme
+Api-Version: 1
+Authorization: Bearer {{token}}
+
+###
+
+### Get Supplier by ID
+GET http://localhost:5215/api/suppliers/{{supplierId}}
+Api-Version: 1
+Authorization: Bearer {{token}}
+
+###
+
+### Delete Supplier
+DELETE http://localhost:5215/api/suppliers/{{supplierId}}
+Api-Version: 1
+Authorization: Bearer {{token}}
+
+###
+
+### Update Supplier
+PUT http://localhost:5215/api/suppliers/{{supplierId}}
+Api-Version: 1
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "legalName": "Acme Soluciones S.A.C.",
+  "commercialName": "Acme Peru",
+  "taxId": "20512345678",
+  "country": "PE",
+  "contactPhone": "+51 999 777 666",
+  "contactEmail": "ventas@acme.pe",
+  "website": "https://acme.pe",
+  "address": "Av. Arequipa 5678, Lima",
+  "annualBillingUsd": 250000.00,
+  "notes": "Actualizado con nueva informacion comercial"
+}
+
+###
+
+### Search all risk lists (no sources filter — queries OFAC, World Bank, ICIJ)
+GET http://localhost:5215/api/lists/search?q=john doe
+Api-Version: 1
+Authorization: Bearer {{token}}
+
+###
+
+### Search OFAC only
+GET http://localhost:5215/api/lists/search?q=lazarus group&sources=ofac
+Api-Version: 1
+Authorization: Bearer {{token}}
+
+###
+
+### Search World Bank only
+GET http://localhost:5215/api/lists/search?q=acme corp&sources=worldbank
+Api-Version: 1
+Authorization: Bearer {{token}}
+
+###
+
+### Search World Bank — multi-field match (matches by name AND address)
+GET http://localhost:5215/api/lists/search?q=national bio-medical&sources=worldbank
+Api-Version: 1
+Authorization: Bearer {{token}}
+
+###
+
+### Search ICIJ only
+GET http://localhost:5215/api/lists/search?q=mossack fonseca&sources=icij
+Api-Version: 1
+Authorization: Bearer {{token}}
+
+###
+
+### Search OFAC + World Bank (multiple sources)
+GET http://localhost:5215/api/lists/search?q=global corp&sources=ofac&sources=worldbank
+Api-Version: 1
+Authorization: Bearer {{token}}
+
+###
+
+### Search with missing query parameter (expect 400 — ValidationPipelineBehavior)
+GET http://localhost:5215/api/lists/search
+Api-Version: 1
+Authorization: Bearer {{token}}
+
+###
+
+### Search with invalid sources (expect 400 — ValidationPipelineBehavior)
+GET http://localhost:5215/api/lists/search?q=test&sources=invalid
+Api-Version: 1
+Authorization: Bearer {{token}}
 
 ###

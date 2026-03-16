@@ -2,19 +2,99 @@
 
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
+        <Version>1.0.0</Version>
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.3"/>
+        <InternalsVisibleTo Include="RiskScreening.UnitTests"/>
     </ItemGroup>
 
     <ItemGroup>
-      <Content Include="..\.dockerignore">
-        <Link>.dockerignore</Link>
-      </Content>
+        <!-- ================================== -->
+        <!-- ASP.NET CORE WEB                   -->
+        <!-- ================================== -->
+        <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.3"/>
+
+        <!-- ================================== -->
+        <!-- API VERSIONING                     -->
+        <!-- ================================== -->
+        <PackageReference Include="Asp.Versioning.Mvc" Version="8.1.1"/>
+        <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" Version="8.1.1"/>
+
+        <!-- ================================== -->
+        <!-- SWAGGER UI                         -->
+        <!-- ================================== -->
+        <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.4"/>
+        <PackageReference Include="Swashbuckle.AspNetCore.Annotations" Version="10.1.4"/>
+
+        <!-- ================================== -->
+        <!-- ENTITY FRAMEWORK CORE              -->
+        <!-- ================================== -->
+        <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.3"/>
+        <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.3"/>
+
+        <!-- ================================== -->
+        <!-- DBUP (MIGRATIONS)                  -->
+        <!-- ================================== -->
+        <PackageReference Include="dbup-sqlserver" Version="7.2.0"/>
+
+        <!-- ================================== -->
+        <!-- JWT AUTHENTICATION                 -->
+        <!-- ================================== -->
+        <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.3"/>
+
+        <!-- ================================== -->
+        <!-- BCRYPT PASSWORD HASHING            -->
+        <!-- ================================== -->
+        <PackageReference Include="BCrypt.Net-Next" Version="4.0.3"/>
+
+        <!-- ================================== -->
+        <!-- FLUENT VALIDATION                  -->
+        <!-- ================================== -->
+        <PackageReference Include="FluentValidation" Version="12.1.1"/>
+        <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="12.1.1"/>
+
+        <!-- ================================== -->
+        <!-- MEDIATR                            -->
+        <!-- Publisher + Commands/Queries CQRS  -->
+        <!-- ================================== -->
+        <PackageReference Include="MediatR" Version="14.1.0"/>
+
+        <!-- ================================== -->
+        <!-- RATE LIMITING                      -->
+        <!-- ================================== -->
+        <PackageReference Include="AspNetCoreRateLimit" Version="5.0.0"/>
+
+        <!-- ================================== -->
+        <!-- LOGGING                             -->
+        <!-- ================================== -->
+        <PackageReference Include="Serilog" Version="4.3.1"/>
+        <PackageReference Include="Serilog.AspNetCore" Version="10.0.0"/>
+        <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1"/>
+
+        <!-- ================================== -->
+        <!-- HTML PARSING (FOR WEB SCRAPING)     -->
+        <!-- ================================== -->
+        <PackageReference Include="HtmlAgilityPack" Version="1.11.71"/>
+
+        <!-- ================================== -->
+        <!-- PLAYWRIGHT (FOR WEB SCRAPING)       -->
+        <!-- ================================== -->
+        <PackageReference Include="Microsoft.Playwright" Version="1.58.0"/>
     </ItemGroup>
 
+    <ItemGroup>
+        <Content Include="..\.dockerignore">
+            <Link>.dockerignore</Link>
+        </Content>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Folder Include="Modules\"/>
+        <!-- SQL migration scripts embedded into the assembly -->
+        <EmbeddedResource Include="Migrations\Scripts\*.sql"/>
+    </ItemGroup>
 </Project>

@@ -1,7 +1,36 @@
-﻿services:
+services:
   riskscreening.api:
     image: riskscreening.api
     build:
       context: .
       dockerfile: RiskScreening.API/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      App__TimeZone: "${APP_TIMEZONE:-America/Lima}"
+      TZ: "${APP_TIMEZONE:-America/Lima}"
+      ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=RiskScreeningDb;User Id=sa;Password=${SA_PASSWORD:-RiskScreening123!};TrustServerCertificate=True"
+      Jwt__Key: "${JWT_KEY:-NmEyM2I5MTMtZWM3ZC00MzcwLTg5YjUtNDM0ZTg1MTUyMzAzM2QwZWU0ZjEtNTA0MS00NDYxLThmZDgtODA0NDNiZjNmNzYz}"
+      Cors__AllowedOrigins__0: "${CORS_ORIGIN:-http://localhost:4200}"
+      IamSeed__AdminEmail: "${ADMIN_EMAIL:-admin@riskscreening.com}"
+      IamSeed__AdminPassword: "${ADMIN_PASSWORD:-Admin123!}"
+      AllowedHosts: "*"
+    depends_on:
+      sqlserver:
+        condition: service_started
 
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: riskscreening-sqlserver
+    environment:
+      MSSQL_SA_PASSWORD: "${SA_PASSWORD:-RiskScreening123!}"
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+
+volumes:
+  sqlserver_data:
